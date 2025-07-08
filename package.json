@@ -1,7 +1,7 @@
 {
   "name": "supapup",
-  "version": "0.1.0",
-  "description": "MCP server that provides AI-friendly web automation through Puppeteer with agent-aware page mapping, debugging tools, and network monitoring",
+  "version": "0.1.1",
+  "description": "⚡ Lightning-fast MCP browser dev tool. Navigate → Get instant structured data. No screenshots needed! Puppeteer: 📸 → CSS selectors → JS eval. Supapup: semantic IDs ready to use. 10x faster, 90% fewer tokens.",
   "keywords": [
     "mcp",
     "model-context-protocol",

@@ -15,6 +15,53 @@
 
 ---
 
+## 🚀 See the Difference
+
+### ❌ With Regular Puppeteer MCP
+```console
+$ puppeteer navigate https://example.com
+✓ Navigated to https://example.com
+
+$ puppeteer screenshot
+✓ Screenshot taken (800x600)
+[📸 High token cost image data...]
+
+$ # Now what? Need to inspect elements, write selectors, execute JS...
+```
+
+### ✅ With Supapup
+```console
+$ supapup navigate https://example.com
+✅ Navigation successful
+📍 URL: https://example.com
+
+AGENT PAGE VIEW
+==============================
+Found 42 interactive elements
+
+📝 FORMS:
+  • form: login-form
+    - email: form-login-email
+    - password: form-login-password  
+    - submit: form-login-submit
+
+🎛️ CONTROLS:
+  • link: sign-up → signup-link
+  • link: forgot-password → forgot-password-link
+  • button: get-started → get-started-button
+  
+✨ Ready to interact! No screenshots needed.
+Example: execute_action({actionId: "form-login-email", params: {value: "user@example.com"}})
+```
+
+**The Result?**
+- ⚡ **10x faster** - Instant structured data vs screenshots + manual inspection
+- 💰 **90% fewer tokens** - Text-based output instead of images
+- 🎯 **Zero complexity** - Semantic IDs ready to use, no CSS selectors needed
+- 🔄 **Dynamic handling** - Automatically remaps after page changes
+
+---
+
 Supapup is an intelligent web automation tool that bridges the gap between AI agents and web browsers. It wraps Puppeteer with Model Context Protocol (MCP) support, providing a structured, predictable interface for programmatic web interaction.
 
 ## ✨ Features

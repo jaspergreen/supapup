@@ -267,8 +267,17 @@ export class NetworkTools {
       const { enable, rules = [] } = args;
       
       if (enable) {
-        await this.page.setRequestInterception(true);
+        // Check if interception is already enabled
+        const isInterceptionEnabled = (this.page as any)._isInterceptionEnabled;
         
+        if (!isInterceptionEnabled) {
+          await this.page.setRequestInterception(true);
+        }
+        
+        // Remove existing request listeners to avoid duplicates
+        this.page.removeAllListeners('request');
+        
+        // Add new request handler
         this.page.on('request', (request) => {
           let shouldBlock = false;
           let modifiedHeaders = { ...request.headers() };
