@@ -1,7 +1,7 @@
 {
   "name": "supapup",
   "version": "0.1.0",
-  "description": "MCP-aware Puppeteer wrapper for intelligent web automation and interaction",
+  "description": "MCP server that provides AI-friendly web automation through Puppeteer with agent-aware page mapping, debugging tools, and network monitoring",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -15,13 +15,13 @@
   ],
   "author": "Cobus Swart",
   "license": "MIT",
-  "homepage": "https://github.com/yourusername/supapup#readme",
+  "homepage": "https://github.com/jaspergreen/supapup#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/supapup.git"
+    "url": "git+https://github.com/jaspergreen/supapup.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/supapup/issues"
+    "url": "https://github.com/jaspergreen/supapup/issues"
   },
   "main": "dist/index.js",
   "type": "module",
