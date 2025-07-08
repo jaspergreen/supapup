@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Products</title>
+</head>
+<body>
+    <h1>TechStore - Products</h1>
+    <a href="index.html">Home</a> | <a href="cart.html">Cart (<span id="cartCount">0</span>)</a>
+    
+    <h2>Available Products</h2>
+    
+    <div id="products">
+        <div style="border:1px solid black; padding:10px; margin:10px;">
+            <h3>Laptop Pro X1</h3>
+            <p>Price: $1299.99</p>
+            <p>High-performance laptop with 16GB RAM</p>
+            <button onclick="addToCart(1, 'Laptop Pro X1', 1299.99)">Add to Cart</button>
+        </div>
+        
+        <div style="border:1px solid black; padding:10px; margin:10px;">
+            <h3>Wireless Mouse</h3>
+            <p>Price: $29.99</p>
+            <p>Ergonomic wireless mouse with precision tracking</p>
+            <button onclick="addToCart(2, 'Wireless Mouse', 29.99)">Add to Cart</button>
+        </div>
+        
+        <div style="border:1px solid black; padding:10px; margin:10px;">
+            <h3>4K Monitor</h3>
+            <p>Price: $499.99</p>
+            <p>27-inch 4K display with HDR support</p>
+            <button onclick="addToCart(3, '4K Monitor', 499.99)">Add to Cart</button>
+        </div>
+        
+        <div style="border:1px solid black; padding:10px; margin:10px;">
+            <h3>Mechanical Keyboard</h3>
+            <p>Price: $89.99</p>
+            <p>RGB backlit mechanical keyboard</p>
+            <button onclick="addToCart(4, 'Mechanical Keyboard', 89.99)">Add to Cart</button>
+        </div>
+    </div>
+    
+    <div id="message" style="color:green; margin:10px;"></div>
+
+    <script src="bridge.js"></script>
+    <script>
+        // Check if logged in
+        if (!localStorage.getItem('user')) {
+            alert('Please login first!');
+            window.location.href = 'index.html';
+        }
+
+        // Cart functionality
+        function updateCartCount() {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            document.getElementById('cartCount').textContent = cart.length;
+        }
+
+        function addToCart(id, name, price) {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const existingItem = cart.find(item => item.id === id);
+            
+            if (existingItem) {
+                existingItem.quantity++;
+            } else {
+                cart.push({ id, name, price, quantity: 1 });
+            }
+            
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartCount();
+            
+            document.getElementById('message').textContent = `Added ${name} to cart!`;
+            setTimeout(() => {
+                document.getElementById('message').textContent = '';
+            }, 2000);
+        }
+
+        // Initialize
+        updateCartCount();
+        window.__MCP_BRIDGE__ = new ProductsBridge();
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Home (Tagged)</title>
+</head>
+<body>
+    <h1 data-mcp-id="header-title" data-mcp-text="TechStore">TechStore</h1>
+    <p data-mcp-id="welcome-text">Welcome! You must login to shop.</p>
+    
+    <div id="status" data-mcp-id="status-text" data-mcp-state="login-status">Not logged in</div>
+    
+    <button id="showLoginBtn" 
+            data-mcp-id="btn-show-login" 
+            data-mcp-action="click"
+            data-mcp-text="Login"
+            data-mcp-effect="shows:form-login">Login</button>
+    
+    <div id="loginSection" 
+         data-mcp-id="section-login" 
+         data-mcp-visibility="hidden"
+         style="display:none; border:1px solid black; padding:10px; margin:10px 0;">
+        <h3>Login</h3>
+        <form id="loginForm" 
+              data-mcp-id="form-login" 
+              data-mcp-type="form"
+              data-mcp-action="submit"
+              data-mcp-validation="email:required,password:required">
+            <label data-mcp-id="form-login-email-label">Email: 
+                <input type="email" 
+                       id="email" 
+                       data-mcp-id="form-login-email" 
+                       data-mcp-parent="form-login"
+                       data-mcp-field="email"
+                       data-mcp-type="email"
+                       data-mcp-default="demo@example.com"
+                       value="demo@example.com">
+            </label><br>
+            <label data-mcp-id="form-login-password-label">Password: 
+                <input type="password" 
+                       id="password" 
+                       data-mcp-id="form-login-password" 
+                       data-mcp-parent="form-login"
+                       data-mcp-field="password"
+                       data-mcp-type="password"
+                       data-mcp-default="password123"
+                       value="password123">
+            </label><br>
+            <button type="submit" 
+                    data-mcp-id="form-login-submit" 
+                    data-mcp-parent="form-login"
+                    data-mcp-action="submit"
+                    data-mcp-text="Login"
+                    data-mcp-expects="dialog:5000">Login</button>
+        </form>
+    </div>
+    
+    <div id="shopSection" 
+         data-mcp-id="section-shop" 
+         data-mcp-visibility="hidden"
+         data-mcp-requires="logged-in"
+         style="display:none;">
+        <h3>Welcome <span id="userName" 
+                         data-mcp-id="user-name" 
+                         data-mcp-state="current-user-name"></span>!</h3>
+        <a href="products.html" 
+           data-mcp-id="link-products" 
+           data-mcp-action="navigate"
+           data-mcp-href="products.html"
+           data-mcp-text="Browse Products">Browse Products</a>
+    </div>
+
+    <script src="tag-bridge.js"></script>
+    <script>
+        // Original functionality remains the same
+        const showLoginBtn = document.getElementById('showLoginBtn');
+        const loginSection = document.getElementById('loginSection');
+        const loginForm = document.getElementById('loginForm');
+        const shopSection = document.getElementById('shopSection');
+        const status = document.getElementById('status');
+
+        showLoginBtn.addEventListener('click', () => {
+            loginSection.style.display = 'block';
+            showLoginBtn.style.display = 'none';
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Simulate login
+            if (email === 'demo@example.com' && password === 'password123') {
+                localStorage.setItem('user', JSON.stringify({ email, name: 'Demo User' }));
+                status.textContent = 'Logged in as: ' + email;
+                loginSection.style.display = 'none';
+                shopSection.style.display = 'block';
+                document.getElementById('userName').textContent = 'Demo User';
+            } else {
+                alert('Invalid credentials! Use demo@example.com / password123');
+            }
+        });
+
+        // Check if already logged in
+        const user = localStorage.getItem('user');
+        if (user) {
+            const userData = JSON.parse(user);
+            status.textContent = 'Logged in as: ' + userData.email;
+            showLoginBtn.style.display = 'none';
+            shopSection.style.display = 'block';
+            document.getElementById('userName').textContent = userData.name;
+        }
+    </script>
+    
+    <!-- Load Tag Bridge v3 -->
+    <script src="tag-bridge-v3.js"></script>
+</body>
+</html>

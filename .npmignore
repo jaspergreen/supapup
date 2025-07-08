@@ -1,0 +1,70 @@
+# Source files (TypeScript)
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Test files
+test/
+test-*/
+*.test.*
+*.spec.*
+test-*.js
+test-*.mjs
+
+# Development files
+debug-*.js
+fix-*.js
+*.log
+logs/
+
+# Examples (optional - could be included)
+examples/
+
+# Documentation sources
+mcp-bridge-generator/
+*.md
+!README.md
+!CLAUDE.md
+
+# Build artifacts
+*.tsbuildinfo
+*.map
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Package manager files
+yarn.lock
+pnpm-lock.yaml
+
+# Config files
+tsconfig.json
+.eslintrc*
+.prettierrc*
+
+# Git files
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Misc
+*.bak
+*.backup
+*.tmp
+*.temp
+supapup-mcp.sh
+install.md
+
+# Packages directory
+packages/
+
+# Screenshots and generated files
+*.jpg
+*.png
+*.jpeg
+*.gif

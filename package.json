@@ -1,0 +1,66 @@
+{
+  "name": "supapup",
+  "version": "0.1.0",
+  "description": "MCP-aware Puppeteer wrapper for intelligent web automation and interaction",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "puppeteer",
+    "web-automation",
+    "browser-automation",
+    "ai-agents",
+    "web-scraping",
+    "debugging",
+    "network-monitoring"
+  ],
+  "author": "Cobus Swart",
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/supapup#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/supapup.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/supapup/issues"
+  },
+  "main": "dist/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CLAUDE.md"
+  ],
+  "bin": {
+    "supapup": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "cli": "node dist/cli.js",
+    "supapup": "node dist/cli.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "jsdom": "^26.1.0",
+    "puppeteer": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

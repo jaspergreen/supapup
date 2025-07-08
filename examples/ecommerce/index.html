@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Home</title>
+</head>
+<body>
+    <h1>TechStore</h1>
+    <p>Welcome! You must login to shop.</p>
+    
+    <div id="status">Not logged in</div>
+    
+    <button id="showLoginBtn">Login</button>
+    
+    <div id="loginSection" style="display:none; border:1px solid black; padding:10px; margin:10px 0;">
+        <h3>Login</h3>
+        <form id="loginForm">
+            Email: <input type="email" id="email" value="demo@example.com"><br>
+            Password: <input type="password" id="password" value="password123"><br>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+    
+    <div id="shopSection" style="display:none;">
+        <h3>Welcome <span id="userName"></span>!</h3>
+        <a href="products.html">Browse Products</a>
+    </div>
+
+    <script src="bridge.js"></script>
+    <script>
+        // Page functionality
+        const showLoginBtn = document.getElementById('showLoginBtn');
+        const loginSection = document.getElementById('loginSection');
+        const loginForm = document.getElementById('loginForm');
+        const shopSection = document.getElementById('shopSection');
+        const status = document.getElementById('status');
+
+        showLoginBtn.addEventListener('click', () => {
+            loginSection.style.display = 'block';
+            showLoginBtn.style.display = 'none';
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Simulate login
+            if (email === 'demo@example.com' && password === 'password123') {
+                localStorage.setItem('user', JSON.stringify({ email, name: 'Demo User' }));
+                status.textContent = 'Logged in as: ' + email;
+                loginSection.style.display = 'none';
+                shopSection.style.display = 'block';
+                document.getElementById('userName').textContent = 'Demo User';
+            } else {
+                alert('Invalid credentials! Use demo@example.com / password123');
+            }
+        });
+
+        // Check if already logged in
+        const user = localStorage.getItem('user');
+        if (user) {
+            const userData = JSON.parse(user);
+            status.textContent = 'Logged in as: ' + userData.email;
+            showLoginBtn.style.display = 'none';
+            shopSection.style.display = 'block';
+            document.getElementById('userName').textContent = userData.name;
+        }
+
+        // Initialize bridge
+        window.__MCP_BRIDGE__ = new HomeBridge();
+    </script>
+</body>
+</html>

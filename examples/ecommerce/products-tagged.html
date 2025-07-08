@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Products (Tagged)</title>
+</head>
+<body>
+    <h1 data-mcp-id="header-title">TechStore - Products</h1>
+    <a href="index-tagged.html" 
+       data-mcp-id="link-home" 
+       data-mcp-action="navigate"
+       data-mcp-href="index-tagged.html"
+       data-mcp-text="Home">Home</a> | 
+    <a href="cart-tagged.html" 
+       data-mcp-id="link-cart" 
+       data-mcp-action="navigate"
+       data-mcp-href="cart-tagged.html"
+       data-mcp-text="Cart">Cart (<span id="cartCount" 
+                                      data-mcp-id="cart-count" 
+                                      data-mcp-state="cart-items-count">0</span>)</a>
+    
+    <h2>Our Products</h2>
+    
+    <div id="products" 
+         data-mcp-id="product-list" 
+         data-mcp-type="list"
+         data-mcp-items="products">
+        <div class="product" 
+             data-mcp-id="product-laptop" 
+             data-mcp-type="product"
+             data-mcp-product-id="1"
+             data-mcp-product-name="Laptop Pro"
+             data-mcp-product-price="999"
+             style="border:1px solid #ccc; padding:10px; margin:10px 0;">
+            <h3 data-mcp-id="product-laptop-name">Laptop Pro</h3>
+            <p data-mcp-id="product-laptop-price">Price: $999</p>
+            <p data-mcp-id="product-laptop-stock" data-mcp-state="product-1-stock">In Stock: 5</p>
+            <button onclick="addToCart(1, 'Laptop Pro', 999)" 
+                    data-mcp-id="product-laptop-add" 
+                    data-mcp-parent="product-laptop"
+                    data-mcp-action="click"
+                    data-mcp-function="addToCart"
+                    data-mcp-params="1,Laptop Pro,999"
+                    data-mcp-text="Add to Cart">Add to Cart</button>
+        </div>
+        
+        <div class="product" 
+             data-mcp-id="product-mouse" 
+             data-mcp-type="product"
+             data-mcp-product-id="2"
+             data-mcp-product-name="Wireless Mouse"
+             data-mcp-product-price="29"
+             style="border:1px solid #ccc; padding:10px; margin:10px 0;">
+            <h3 data-mcp-id="product-mouse-name">Wireless Mouse</h3>
+            <p data-mcp-id="product-mouse-price">Price: $29</p>
+            <p data-mcp-id="product-mouse-stock" data-mcp-state="product-2-stock">In Stock: 50</p>
+            <button onclick="addToCart(2, 'Wireless Mouse', 29)" 
+                    data-mcp-id="product-mouse-add" 
+                    data-mcp-parent="product-mouse"
+                    data-mcp-action="click"
+                    data-mcp-function="addToCart"
+                    data-mcp-params="2,Wireless Mouse,29"
+                    data-mcp-text="Add to Cart">Add to Cart</button>
+        </div>
+        
+        <div class="product" 
+             data-mcp-id="product-keyboard" 
+             data-mcp-type="product"
+             data-mcp-product-id="3"
+             data-mcp-product-name="Mechanical Keyboard"
+             data-mcp-product-price="79"
+             style="border:1px solid #ccc; padding:10px; margin:10px 0;">
+            <h3 data-mcp-id="product-keyboard-name">Mechanical Keyboard</h3>
+            <p data-mcp-id="product-keyboard-price">Price: $79</p>
+            <p data-mcp-id="product-keyboard-stock" data-mcp-state="product-3-stock">In Stock: 15</p>
+            <button onclick="addToCart(3, 'Mechanical Keyboard', 79)" 
+                    data-mcp-id="product-keyboard-add" 
+                    data-mcp-parent="product-keyboard"
+                    data-mcp-action="click"
+                    data-mcp-function="addToCart"
+                    data-mcp-params="3,Mechanical Keyboard,79"
+                    data-mcp-text="Add to Cart">Add to Cart</button>
+        </div>
+    </div>
+
+    <script src="tag-bridge.js"></script>
+    <script>
+        // Cart functionality
+        let cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        updateCartCount();
+
+        function addToCart(id, name, price) {
+            const existingItem = cart.find(item => item.id === id);
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({ id, name, price, quantity: 1 });
+            }
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartCount();
+            alert(`${name} added to cart!`);
+        }
+
+        function updateCartCount() {
+            const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+            document.getElementById('cartCount').textContent = count;
+        }
+    </script>
+</body>
+</html>

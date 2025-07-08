@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Cart</title>
+</head>
+<body>
+    <h1>TechStore - Shopping Cart</h1>
+    <a href="index.html">Home</a> | <a href="products.html">Continue Shopping</a>
+    
+    <div id="cartItems" style="margin:20px 0;">
+        <!-- Cart items will be displayed here -->
+    </div>
+    
+    <div id="cartTotal" style="font-weight:bold; margin:20px 0;"></div>
+    
+    <button id="checkoutBtn" style="display:none;" onclick="startCheckout()">Proceed to Checkout</button>
+    
+    <div id="checkoutForm" style="display:none; border:1px solid black; padding:20px; margin:20px 0;">
+        <h3>Checkout</h3>
+        <form id="checkoutFormElement">
+            <h4>Shipping Information</h4>
+            Full Name: <input type="text" id="fullName" required><br>
+            Address: <input type="text" id="address" required><br>
+            City: <input type="text" id="city" required><br>
+            ZIP: <input type="text" id="zip" required><br>
+            
+            <h4>Payment Information</h4>
+            Card Number: <input type="text" id="cardNumber" placeholder="1234 5678 9012 3456" required><br>
+            Expiry: <input type="text" id="expiry" placeholder="MM/YY" required><br>
+            CVV: <input type="text" id="cvv" placeholder="123" required><br>
+            
+            <button type="submit">Place Order</button>
+        </form>
+    </div>
+    
+    <div id="orderConfirmation" style="display:none; border:2px solid green; padding:20px; margin:20px 0;">
+        <h3>Order Confirmed!</h3>
+        <p>Order ID: <span id="orderId"></span></p>
+        <p>Total: <span id="orderTotal"></span></p>
+        <p>Estimated delivery: 3-5 business days</p>
+        <a href="tracking.html">Track your order</a>
+    </div>
+
+    <script src="bridge.js"></script>
+    <script>
+        // Check if logged in
+        if (!localStorage.getItem('user')) {
+            alert('Please login first!');
+            window.location.href = 'index.html';
+        }
+
+        // Display cart
+        function displayCart() {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            const cartItemsDiv = document.getElementById('cartItems');
+            const cartTotalDiv = document.getElementById('cartTotal');
+            const checkoutBtn = document.getElementById('checkoutBtn');
+            
+            if (cart.length === 0) {
+                cartItemsDiv.innerHTML = '<p>Your cart is empty</p>';
+                cartTotalDiv.textContent = '';
+                checkoutBtn.style.display = 'none';
+                return;
+            }
+            
+            let html = '<table border="1" style="width:100%;">';
+            html += '<tr><th>Product</th><th>Price</th><th>Quantity</th><th>Total</th><th>Action</th></tr>';
+            
+            let total = 0;
+            cart.forEach((item, index) => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                html += `<tr>
+                    <td>${item.name}</td>
+                    <td>$${item.price.toFixed(2)}</td>
+                    <td>${item.quantity}</td>
+                    <td>$${itemTotal.toFixed(2)}</td>
+                    <td><button onclick="removeFromCart(${index})">Remove</button></td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            cartItemsDiv.innerHTML = html;
+            cartTotalDiv.textContent = `Total: $${total.toFixed(2)}`;
+            checkoutBtn.style.display = 'block';
+        }
+
+        function removeFromCart(index) {
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            cart.splice(index, 1);
+            localStorage.setItem('cart', JSON.stringify(cart));
+            displayCart();
+        }
+
+        function startCheckout() {
+            document.getElementById('checkoutForm').style.display = 'block';
+            document.getElementById('checkoutBtn').style.display = 'none';
+        }
+
+        // Handle checkout
+        document.getElementById('checkoutFormElement').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+            let total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            const orderId = 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+            const order = {
+                id: orderId,
+                items: cart,
+                total: total,
+                shipping: {
+                    fullName: document.getElementById('fullName').value,
+                    address: document.getElementById('address').value,
+                    city: document.getElementById('city').value,
+                    zip: document.getElementById('zip').value
+                },
+                status: 'Processing',
+                date: new Date().toISOString()
+            };
+            
+            // Save order
+            const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+            orders.push(order);
+            localStorage.setItem('orders', JSON.stringify(orders));
+            localStorage.setItem('lastOrder', orderId);
+            
+            // Clear cart
+            localStorage.removeItem('cart');
+            
+            // Show confirmation
+            document.getElementById('checkoutForm').style.display = 'none';
+            document.getElementById('cartItems').style.display = 'none';
+            document.getElementById('cartTotal').style.display = 'none';
+            document.getElementById('orderConfirmation').style.display = 'block';
+            document.getElementById('orderId').textContent = orderId;
+            document.getElementById('orderTotal').textContent = `$${total.toFixed(2)}`;
+        });
+
+        // Initialize
+        displayCart();
+        window.__MCP_BRIDGE__ = new CartBridge();
+    </script>
+</body>
+</html>

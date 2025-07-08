@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - MCP Bridge Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .bridge-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background-color: #28a745;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bridge-status">MCP Bridge Active</div>
+    
+    <div class="container">
+        <h1>Login</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+        <div id="message" class="message"></div>
+    </div>
+
+    <script>
+        // MCP Bridge Implementation
+        class MCPBridge {
+            constructor() {
+                this.actions = [
+                    {
+                        id: 'fill_username',
+                        type: 'fill',
+                        selector: '#username',
+                        description: 'Fill the username field',
+                        inputs: { value: 'string' }
+                    },
+                    {
+                        id: 'fill_password',
+                        type: 'fill',
+                        selector: '#password',
+                        description: 'Fill the password field',
+                        inputs: { value: 'string' }
+                    },
+                    {
+                        id: 'submit_login',
+                        type: 'submit',
+                        selector: '#loginForm',
+                        description: 'Submit the login form',
+                        outputs: ['success', 'message', 'user']
+                    },
+                    {
+                        id: 'fill_and_submit',
+                        type: 'custom',
+                        description: 'Fill credentials and submit in one action',
+                        inputs: { username: 'string', password: 'string' },
+                        outputs: ['success', 'message', 'user']
+                    }
+                ];
+
+                this.state = {
+                    isLoggedIn: false,
+                    attemptCount: 0,
+                    lastError: null
+                };
+            }
+
+            getManifest() {
+                return {
+                    page: 'login',
+                    version: '1.0.0',
+                    actions: this.actions,
+                    state: this.state
+                };
+            }
+
+            getActions() {
+                return this.actions;
+            }
+
+            getState() {
+                return {
+                    ...this.state,
+                    formValid: this.isFormValid(),
+                    timestamp: new Date().toISOString()
+                };
+            }
+
+            isFormValid() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                return username.length > 0 && password.length > 0;
+            }
+
+            async execute(actionId, params = {}) {
+                console.log(`Executing action: ${actionId}`, params);
+
+                switch (actionId) {
+                    case 'fill_username':
+                        document.getElementById('username').value = params.value || '';
+                        document.getElementById('username').dispatchEvent(new Event('input'));
+                        return { success: true };
+
+                    case 'fill_password':
+                        document.getElementById('password').value = params.value || '';
+                        document.getElementById('password').dispatchEvent(new Event('input'));
+                        return { success: true };
+
+                    case 'submit_login':
+                        return this.submitForm();
+
+                    case 'fill_and_submit':
+                        document.getElementById('username').value = params.username || '';
+                        document.getElementById('password').value = params.password || '';
+                        return this.submitForm();
+
+                    default:
+                        throw new Error(`Unknown action: ${actionId}`);
+                }
+            }
+
+            async submitForm() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+
+                if (!username || !password) {
+                    return {
+                        success: false,
+                        message: 'Username and password are required'
+                    };
+                }
+
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                this.state.attemptCount++;
+
+                // Simple mock authentication
+                if (username === 'demo' && password === 'password') {
+                    this.state.isLoggedIn = true;
+                    this.state.lastError = null;
+                    
+                    this.showMessage('Login successful! Welcome, ' + username, 'success');
+                    
+                    return {
+                        success: true,
+                        message: 'Login successful',
+                        user: {
+                            id: '12345',
+                            username: username,
+                            email: username + '@example.com'
+                        }
+                    };
+                } else {
+                    this.state.lastError = 'Invalid credentials';
+                    
+                    this.showMessage('Invalid username or password', 'error');
+                    
+                    return {
+                        success: false,
+                        message: 'Invalid credentials'
+                    };
+                }
+            }
+
+            showMessage(text, type) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.className = 'message ' + type;
+                messageEl.style.display = 'block';
+            }
+        }
+
+        // Initialize bridge
+        window.__MCP_BRIDGE__ = new MCPBridge();
+        window.__MCP_MANIFEST__ = window.__MCP_BRIDGE__.getManifest();
+
+        // Regular form handling for humans
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const result = await window.__MCP_BRIDGE__.execute('submit_login');
+            console.log('Form submitted:', result);
+        });
+
+        // Log bridge availability
+        console.log('MCP Bridge initialized:', window.__MCP_BRIDGE__);
+    </script>
+</body>
+</html>

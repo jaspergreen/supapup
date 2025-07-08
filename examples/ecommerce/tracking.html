@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TechStore - Order Tracking</title>
+</head>
+<body>
+    <h1>TechStore - Order Tracking</h1>
+    <a href="index.html">Home</a> | <a href="products.html">Shop</a>
+    
+    <h2>Your Orders</h2>
+    
+    <div id="orders" style="margin:20px 0;">
+        <!-- Orders will be displayed here -->
+    </div>
+    
+    <button onclick="localStorage.clear(); alert('All data cleared!'); window.location.href='index.html';">Clear All Data (Reset Demo)</button>
+
+    <script src="bridge.js"></script>
+    <script>
+        // Check if logged in
+        if (!localStorage.getItem('user')) {
+            alert('Please login first!');
+            window.location.href = 'index.html';
+        }
+
+        // Display orders
+        function displayOrders() {
+            const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+            const ordersDiv = document.getElementById('orders');
+            
+            if (orders.length === 0) {
+                ordersDiv.innerHTML = '<p>No orders found</p>';
+                return;
+            }
+            
+            let html = '';
+            orders.forEach(order => {
+                html += `<div style="border:1px solid black; padding:10px; margin:10px 0;">
+                    <h3>Order ${order.id}</h3>
+                    <p>Date: ${new Date(order.date).toLocaleDateString()}</p>
+                    <p>Status: <strong>${order.status}</strong></p>
+                    <p>Total: $${order.total.toFixed(2)}</p>
+                    <p>Items:</p>
+                    <ul>`;
+                
+                order.items.forEach(item => {
+                    html += `<li>${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}</li>`;
+                });
+                
+                html += `</ul>
+                    <p>Shipping to: ${order.shipping.fullName}, ${order.shipping.address}, ${order.shipping.city} ${order.shipping.zip}</p>
+                </div>`;
+            });
+            
+            ordersDiv.innerHTML = html;
+        }
+
+        // Initialize
+        displayOrders();
+        window.__MCP_BRIDGE__ = new TrackingBridge();
+    </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Layout Shift Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        
+        .header {
+            background: #333;
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .content {
+            min-height: 200px;
+            background: #f0f0f0;
+            padding: 20px;
+        }
+        
+        .late-loading {
+            display: none;
+            background: #ff6b6b;
+            color: white;
+            padding: 30px;
+            margin: 20px 0;
+            font-size: 20px;
+        }
+        
+        .image-placeholder {
+            background: #ddd;
+            height: 300px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Layout Shift Test Page</h1>
+        <p>This page demonstrates common layout shift issues</p>
+    </div>
+    
+    <div class="content">
+        <h2>Initial Content</h2>
+        <p>This content is visible immediately when the page loads.</p>
+        
+        <div class="late-loading" id="announcement">
+            SPECIAL ANNOUNCEMENT: This banner appears after 1 second!
+        </div>
+        
+        <p>This paragraph gets pushed down when the announcement appears.</p>
+        
+        <div class="image-placeholder" id="image-container">
+            Loading image...
+        </div>
+        
+        <p>More content that shifts when elements load.</p>
+    </div>
+    
+    <script>
+        // Simulate late-loading content that causes layout shift
+        setTimeout(() => {
+            document.getElementById('announcement').style.display = 'block';
+        }, 1000);
+        
+        // Simulate image loading after 2 seconds
+        setTimeout(() => {
+            const container = document.getElementById('image-container');
+            container.style.height = '500px';
+            container.style.background = '#4CAF50';
+            container.innerHTML = '<h3>Image Loaded!</h3>';
+        }, 2000);
+    </script>
+</body>
+</html>
