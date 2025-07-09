@@ -80,10 +80,12 @@ export class AgentPageScript {
           
           if (tag === 'input') {
             if (type === 'submit') return { type: 'submit', action: 'click' };
+            if (type === 'checkbox') return { type: 'checkbox', action: 'toggle' };
+            if (type === 'radio') return { type: 'radio', action: 'toggle' };
             return { type: type || 'text', action: 'fill' };
           }
           if (tag === 'button') return { type: 'button', action: 'click' };
-          if (tag === 'select') return { type: 'select', action: 'select' };
+          if (tag === 'select') return { type: 'select', action: 'choose' };
           if (tag === 'textarea') return { type: 'textarea', action: 'fill' };
           if (tag === 'a') return { type: 'link', action: 'click' };
           
@@ -139,6 +141,69 @@ export class AgentPageScript {
           if (action === 'fill' && params.value !== undefined) {
             element.value = params.value;
             element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (action === 'toggle') {
+            // Handle checkbox and radio button toggling
+            if (element.tagName.toLowerCase() === 'input') {
+              const inputEl = element;
+              const inputType = inputEl.type;
+              
+              if (inputType === 'checkbox') {
+                // For checkboxes, toggle the checked state
+                // If params.value is provided, use that; otherwise toggle current state
+                if (params.value !== undefined) {
+                  inputEl.checked = Boolean(params.value);
+                } else {
+                  inputEl.checked = !inputEl.checked;
+                }
+                
+                // Dispatch proper events for form validation
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+              } else if (inputType === 'radio') {
+                // For radio buttons, always set to checked
+                inputEl.checked = true;
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            } else {
+              // For other elements with toggle action, fall back to click
+              element.click();
+            }
+          } else if (action === 'choose' || action === 'select') {
+            if (element.tagName.toLowerCase() === 'select') {
+              const selectEl = element;
+              const inputValue = params.value || '';
+              
+              // Try to find option by value first
+              let option = Array.from(selectEl.options).find(opt => opt.value === inputValue);
+              
+              // If not found by value, try by display text (case-insensitive)
+              if (!option && inputValue) {
+                option = Array.from(selectEl.options).find(opt => 
+                  opt.textContent && opt.textContent.trim().toLowerCase() === inputValue.toLowerCase()
+                );
+              }
+              
+              // If still not found, try partial match on display text
+              if (!option && inputValue) {
+                option = Array.from(selectEl.options).find(opt => 
+                  opt.textContent && opt.textContent.trim().toLowerCase().includes(inputValue.toLowerCase())
+                );
+              }
+              
+              if (option) {
+                selectEl.value = option.value;
+                selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                throw new Error('No option found for "' + inputValue + '". Available options: ' + 
+                  Array.from(selectEl.options).filter(opt => opt.value).map(opt => 
+                    '"' + (opt.textContent ? opt.textContent.trim() : opt.value) + '" (' + opt.value + ')'
+                  ).join(', '));
+              }
+            } else {
+              element.click();
+            }
           } else {
             element.click();
           }

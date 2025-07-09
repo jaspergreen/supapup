@@ -86,14 +86,41 @@ This design enables agents to interact with web pages efficiently without visual
 - Handles JavaScript execution and DOM manipulation
 - Manages page state and action discovery
 
+**Form Tools (src/form-tools.ts & src/form-detector.ts)**
+- `FormTools` enables filling entire forms with JSON data
+- `FormDetector` auto-discovers forms and generates JSON templates
+- Supports validation and automatic form submission
+
+**Human Interaction (src/human-interaction.ts)**
+- `HumanInteraction` enables AI-human collaboration
+- Allows humans to visually identify elements AI can't find
+- Marks elements with special attributes for future reference
+
+**Storage Tools (src/storage-tools.ts)**
+- `StorageTools` manages browser storage (localStorage, sessionStorage, cookies)
+- Supports import/export of storage state for session persistence
+- Provides storage quota and usage information
+
+**DevTools Elements (src/devtools-elements.ts)**
+- `DevToolsElements` provides deep DOM inspection and manipulation
+- Live CSS editing and visual highlighting
+- Creates visual element maps with numbered labels for debugging
+
 ### MCP Tool Categories
 
-1. **Browser Management**: launch_browser, navigate, close_browser, screenshot
-2. **Element Interaction**: execute_action, discover_actions, get_page_state
-3. **Visual Element Mapping**: devtools_visual_element_map - creates numbered visual map of elements
-4. **Debugging**: set_breakpoint, debug_continue, debug_step_over, debug_evaluate
-5. **Network Analysis**: get_network_logs, get_api_logs, replay_api_request, intercept_requests
-6. **Page Analysis**: get_accessibility_tree, inspect_element, get_performance_metrics
+1. **Browser Management**: navigate, close_browser, list_tabs, switch_tab, open_in_tab
+2. **Element Interaction**: execute_action, discover_actions, get_page_state, execute_and_wait
+3. **Form Handling**: fill_form, detect_forms - auto-discover forms and fill with JSON data
+4. **Human Interaction**: ask_human - request human to identify elements visually
+5. **Screenshots**: screenshot, screenshot_paginated, screenshot_chunk - handle large pages
+6. **Debugging**: set_breakpoint, remove_breakpoint, debug_continue, debug_step_over, debug_step_into, debug_evaluate, debug_get_variables, debug_function
+7. **Network Analysis**: get_network_logs, get_api_logs, replay_api_request, intercept_requests, clear_logs
+8. **Console Monitoring**: get_console_logs - capture console output
+9. **Page Analysis**: get_accessibility_tree, get_page_resources, get_performance_metrics
+10. **DevTools Elements**: devtools_inspect_element, devtools_modify_css, devtools_highlight_element, devtools_modify_html, devtools_get_computed_styles, devtools_visual_element_map
+11. **Storage Management**: get_storage, set_storage, remove_storage, clear_storage, export_storage_state, import_storage_state, get_storage_info
+12. **Agent Page Management**: generate_agent_page, remap_page, wait_for_changes, get_agent_page_chunk
+13. **Script Execution**: evaluate_script - execute JavaScript in page context
 
 ### Key Design Patterns
 

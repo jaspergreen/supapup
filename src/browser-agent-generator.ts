@@ -76,42 +76,88 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
   }
 
   function getElementAction(element: Element, type: string): string {
-    if (type === 'textarea' || type.includes('input') || type === 'select') {
-      return 'fill';
+    const tagName = element.tagName.toLowerCase();
+    const inputType = element.getAttribute('type')?.toLowerCase();
+    
+    // Form inputs that need filling
+    if (tagName === 'input') {
+      switch (inputType) {
+        case 'checkbox': return 'toggle';
+        case 'radio': return 'select';
+        case 'submit': return 'click';
+        case 'button': return 'click';
+        case 'file': return 'upload';
+        default: return 'fill'; // All text-like inputs
+      }
     }
-    if (type === 'checkbox' || type === 'radio') {
-      return 'toggle';
-    }
+    
+    if (tagName === 'textarea') return 'fill';
+    if (tagName === 'select') return 'choose';
+    
+    // Everything else is click
     return 'click';
   }
 
+  function getAssociatedLabel(element: Element): string | null {
+    // Label with for attribute
+    const id = element.id;
+    if (id) {
+      const label = document.querySelector(`label[for="${id}"]`);
+      if (label) return label.textContent?.trim() || null;
+    }
+
+    // Parent label
+    const parentLabel = element.closest('label');
+    if (parentLabel) {
+      // Get text content but exclude the input element itself
+      const clone = parentLabel.cloneNode(true) as Element;
+      const input = clone.querySelector('input, select, textarea');
+      if (input) input.remove();
+      return clone.textContent?.trim() || null;
+    }
+
+    // aria-labelledby
+    const labelledBy = element.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const labelElement = document.getElementById(labelledBy);
+      if (labelElement) return labelElement.textContent?.trim() || null;
+    }
+
+    return null;
+  }
+  
   function getElementContext(element: Element): string {
     const tagName = element.tagName.toLowerCase();
     const text = element.textContent?.trim() || '';
-    const ariaLabel = element.getAttribute('aria-label');
-    const title = element.getAttribute('title');
-    const placeholder = element.getAttribute('placeholder');
-    const name = element.getAttribute('name');
-    const id = element.getAttribute('id');
     
-    // Build context string
-    let context = '';
-    
+    // For buttons and links, use their text content
     if (tagName === 'a' || tagName === 'button') {
-      context = text.substring(0, 50);
-    } else if (ariaLabel) {
-      context = ariaLabel;
-    } else if (placeholder) {
-      context = placeholder;
-    } else if (title) {
-      context = title;
-    } else if (name) {
-      context = name;
-    } else if (id) {
-      context = id;
+      return text.substring(0, 50);
     }
     
-    return context;
+    // For form inputs, prioritize label over placeholder
+    const label = getAssociatedLabel(element);
+    if (label) {
+      return label.replace(/\*$/, '').trim(); // Remove trailing asterisk
+    }
+    
+    // Fall back to other attributes
+    const ariaLabel = element.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel;
+    
+    const title = element.getAttribute('title');
+    if (title) return title;
+    
+    const placeholder = element.getAttribute('placeholder');
+    if (placeholder) return placeholder;
+    
+    const name = element.getAttribute('name');
+    if (name) return name;
+    
+    const id = element.getAttribute('id');
+    if (id) return id;
+    
+    return '';
   }
 
   function generateElementId(element: Element, index: number): string {
@@ -187,7 +233,7 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
       id,
       type,
       action,
-      description: `${type}: ${context || 'untitled'}`,
+      description: context || `${type} field`,
       context: context
     };
   });
@@ -195,6 +241,49 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
   // Count tagged elements for verification
   const taggedCount = document.querySelectorAll('[data-mcp-id]').length;
   console.log(`[Browser] Successfully tagged ${taggedCount} elements`);
+
+  // Group elements into forms
+  function groupElementsIntoForms(manifestElements: any[], domElements: Element[]): any[] {
+    const formMap = new Map<Element, any[]>();
+    
+    // Group elements by their parent form
+    manifestElements.forEach((manifestElement, index) => {
+      const domElement = domElements[index];
+      const form = domElement.closest('form');
+      
+      if (form) {
+        if (!formMap.has(form)) {
+          formMap.set(form, []);
+        }
+        formMap.get(form)!.push(manifestElement);
+      }
+    });
+    
+    // Convert to form objects
+    const forms: any[] = [];
+    formMap.forEach((formElements, formElement) => {
+      // Separate submit buttons from regular fields
+      const fields = formElements.filter(el => 
+        !['submit', 'button'].includes(el.type) || el.type === 'button'
+      );
+      const submitButton = formElements.find(el => el.type === 'submit');
+      
+      // Get form name
+      const formName = formElement.getAttribute('name') || 
+                      formElement.getAttribute('id') || 
+                      'Form';
+      
+      forms.push({
+        id: formElement.getAttribute('id') || `form-${forms.length + 1}`,
+        name: formName,
+        action: formElement.getAttribute('action') || 'submit',
+        fields,
+        submit: submitButton
+      });
+    });
+    
+    return forms;
+  }
 
   // Create pagination-aware summary
   let summary = '';
@@ -204,10 +293,13 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
     summary = `Found ${manifestElements.length} interactive elements`;
   }
 
+  // Group elements into forms
+  const forms = groupElementsIntoForms(manifestElements, elements);
+  
   return {
     elements: manifestElements,
     summary,
-    forms: [],
+    forms,
     navigation: [],
     pagination: {
       totalElements,

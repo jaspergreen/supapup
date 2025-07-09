@@ -251,7 +251,7 @@ export class ElementDetector {
   /**
    * Find label associated with form element
    */
-  private static getAssociatedLabel(element: Element): string | null {
+  static getAssociatedLabel(element: Element): string | null {
     // Label with for attribute
     const id = element.id;
     if (id) {
@@ -619,6 +619,12 @@ export class AgentPageGenerator {
         }
         lines.push('');
       });
+      
+      // Add form usage instructions
+      lines.push('💡 FORM TOOLS:');
+      lines.push('  • Fill entire form: fill_form({formData: {"field-id": "value", "checkbox-id": true}})');
+      lines.push('  • Detect all forms: detect_forms()');
+      lines.push('');
     }
 
     // Navigation section
@@ -652,6 +658,8 @@ export class AgentPageGenerator {
 
     lines.push('Usage: Use semantic IDs for interaction');
     lines.push('Example: execute_action({actionId: "form-login-email", params: {value: "user@example.com"}})');
+    lines.push('');
+    lines.push('Note: Elements clicked via ask_human tool have selector: [data-mcp-human-clicked]');
 
     // Add pagination info if present
     if (manifest.pagination && manifest.pagination.hasMore) {
@@ -724,31 +732,48 @@ export class AgentPageGenerator {
    * Generate human-readable description
    */
   private static generateDescription(element: Element, context: string, type: string, action: string): string {
-    // Use context if available and descriptive
-    if (context && context.length > 2 && context.length < 50) {
-      return `${context} (${type})`;
+    // First try to get just the label (not placeholder)
+    const label = ElementDetector.getAssociatedLabel(element);
+    if (label && label.length > 2 && label.length < 50) {
+      return label.replace(/\*$/, '').trim(); // Remove trailing asterisk
     }
-
-    // Generate from element properties
-    const tagName = element.tagName.toLowerCase();
-    const inputType = element.getAttribute('type');
     
-    if (tagName === 'input' && inputType) {
-      return `${inputType} field`;
-    }
+    // For buttons and links, use their text content
+    const tagName = element.tagName.toLowerCase();
     
     if (tagName === 'button') {
       const text = element.textContent?.trim();
-      return text ? `${text} button` : 'button';
+      return text || 'button';
     }
     
     if (tagName === 'a') {
       const text = element.textContent?.trim();
-      return text ? `${text} link` : 'link';
+      return text || 'link';
     }
     
+    // For select elements, try to get label first
     if (tagName === 'select') {
-      return 'dropdown menu';
+      return label || 'dropdown menu';
+    }
+    
+    // For input fields, show the type with label if available
+    const inputType = element.getAttribute('type');
+    if (tagName === 'input' && inputType) {
+      if (label) {
+        return label.replace(/\*$/, '').trim();
+      }
+      return `${inputType} field`;
+    }
+    
+    if (tagName === 'textarea') {
+      return label || 'text area';
+    }
+    
+    // Use context as fallback if no label found
+    if (context && context.length > 2 && context.length < 50) {
+      // Extract just the first part (usually the label)
+      const parts = context.split(/\s{2,}|\||,/);
+      return parts[0].replace(/\*$/, '').trim();
     }
     
     return `${type} element`;
@@ -773,6 +798,23 @@ export class AgentPageGenerator {
   private static getExpectedBehavior(element: Element, action: string): string | undefined {
     const tagName = element.tagName.toLowerCase();
     const type = element.getAttribute('type')?.toLowerCase();
+    
+    // For select elements, show available options
+    if (tagName === 'select' && action === 'choose') {
+      const selectEl = element as HTMLSelectElement;
+      const options = Array.from(selectEl.options)
+        .filter(opt => opt.value && opt.value !== '')
+        .map(opt => {
+          const displayText = opt.textContent?.trim() || opt.value;
+          return `"${displayText}" (${opt.value})`;
+        });
+      
+      if (options.length > 0 && options.length <= 10) {
+        return `Options: ${options.join(', ')}`;
+      } else if (options.length > 10) {
+        return `${options.length} options available. Use display text or value.`;
+      }
+    }
     
     // Form submission
     if ((tagName === 'button' && type === 'submit') || 

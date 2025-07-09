@@ -1,28 +1,158 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TechStore - Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>TechStore</h1>
-    <p>Welcome! You must login to shop.</p>
-    
-    <div id="status">Not logged in</div>
-    
-    <button id="showLoginBtn">Login</button>
-    
-    <div id="loginSection" style="display:none; border:1px solid black; padding:10px; margin:10px 0;">
-        <h3>Login</h3>
-        <form id="loginForm">
-            Email: <input type="email" id="email" value="demo@example.com"><br>
-            Password: <input type="password" id="password" value="password123"><br>
-            <button type="submit">Login</button>
-        </form>
-    </div>
-    
-    <div id="shopSection" style="display:none;">
-        <h3>Welcome <span id="userName"></span>!</h3>
-        <a href="products.html">Browse Products</a>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container px-4 py-8">
+        <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden w-full sm:w-auto">
+            <div class="bg-gradient-to-r from-blue-600 to-purple-600 px-4 sm:px-6 py-6 sm:py-8 text-center">
+                <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">🛍️ TechStore</h1>
+                <p class="text-blue-100 text-sm sm:text-base">Your one-stop tech shop</p>
+            </div>
+            
+            <div class="p-4 sm:p-6">
+                <div class="text-center mb-6">
+                    <p class="text-gray-600 mb-4">Welcome! You must login to shop.</p>
+                    <div id="status" class="inline-block px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                        🔒 Not logged in
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <button id="showLoginBtn" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:scale-105">
+                        🚪 Login to Shop
+                    </button>
+                </div>
+                
+                <div id="loginSection" style="display:none;" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-96 overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">🔐 Customer Registration</h3>
+                    <form id="loginForm" class="space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">First Name *</label>
+                                <input type="text" id="firstName" placeholder="John" 
+                                       class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Last Name *</label>
+                                <input type="text" id="lastName" placeholder="Doe" 
+                                       class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Email Address *</label>
+                            <input type="email" id="email" placeholder="john.doe@example.com" 
+                                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number *</label>
+                            <input type="tel" id="phone" placeholder="+1 (555) 123-4567" 
+                                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Date of Birth</label>
+                            <input type="date" id="dateOfBirth" 
+                                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Country *</label>
+                            <select id="country" class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">Select your country</option>
+                                <option value="us">🇺🇸 United States</option>
+                                <option value="ca">🇨🇦 Canada</option>
+                                <option value="uk">🇬🇧 United Kingdom</option>
+                                <option value="de">🇩🇪 Germany</option>
+                                <option value="fr">🇫🇷 France</option>
+                                <option value="jp">🇯🇵 Japan</option>
+                                <option value="au">🇦🇺 Australia</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Address Line 1 *</label>
+                            <input type="text" id="address1" placeholder="123 Main Street" 
+                                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">City *</label>
+                                <input type="text" id="city" placeholder="New York" 
+                                       class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ZIP Code</label>
+                                <input type="text" id="zipCode" placeholder="10001" 
+                                       class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Password *</label>
+                            <input type="password" id="password" placeholder="Create a secure password" 
+                                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="flex items-center text-xs">
+                            <input type="checkbox" id="newsletter" class="mr-2 rounded">
+                            <label for="newsletter" class="text-gray-700">📧 Subscribe to newsletter</label>
+                        </div>
+                        
+                        <div class="flex items-center text-xs">
+                            <input type="checkbox" id="terms" class="mr-2 rounded" required>
+                            <label for="terms" class="text-gray-700">✅ I agree to Terms *</label>
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md transition duration-200 text-sm">
+                            🚀 Create Account
+                        </button>
+                    </form>
+                </div>
+                
+                <div id="shopSection" style="display:none;" class="mt-6 text-center">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <h3 class="text-lg font-semibold text-green-800 mb-2">
+                            🎉 Welcome <span id="userName" class="text-green-600"></span>!
+                        </h3>
+                        <p class="text-green-700 text-sm">You are now logged in and ready to shop</p>
+                    </div>
+                    
+                    <!-- Demo Action Buttons -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <button id="demoAlert" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            🚨 Test Alert
+                        </button>
+                        <button id="demoPrompt" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            💬 Test Prompt
+                        </button>
+                        <button id="demoFetch" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            🌐 API Call
+                        </button>
+                        <button id="demoError" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                            💥 Test Error
+                        </button>
+                    </div>
+                    
+                    <!-- Dynamic Content Area -->
+                    <div id="dynamicContent" class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4" style="display:none;">
+                        <h4 class="font-semibold text-gray-800 mb-2">📊 Dynamic Content</h4>
+                        <div id="contentBody" class="text-gray-600 text-sm"></div>
+                    </div>
+                    
+                    <a href="products.html" class="inline-block w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:scale-105 text-center">
+                        🛒 Browse Products
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="bridge.js"></script>
@@ -47,7 +177,8 @@
             // Simulate login
             if (email === 'demo@example.com' && password === 'password123') {
                 localStorage.setItem('user', JSON.stringify({ email, name: 'Demo User' }));
-                status.textContent = 'Logged in as: ' + email;
+                status.innerHTML = '🟢 Logged in as: ' + email;
+                status.className = 'inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm';
                 loginSection.style.display = 'none';
                 shopSection.style.display = 'block';
                 document.getElementById('userName').textContent = 'Demo User';
@@ -60,10 +191,54 @@
         const user = localStorage.getItem('user');
         if (user) {
             const userData = JSON.parse(user);
-            status.textContent = 'Logged in as: ' + userData.email;
+            status.innerHTML = '🟢 Logged in as: ' + userData.email;
+            status.className = 'inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm';
             showLoginBtn.style.display = 'none';
             shopSection.style.display = 'block';
             document.getElementById('userName').textContent = userData.name;
+        }
+
+        // Demo button functionality
+        const demoAlert = document.getElementById('demoAlert');
+        const demoPrompt = document.getElementById('demoPrompt');
+        const demoFetch = document.getElementById('demoFetch');
+        const demoError = document.getElementById('demoError');
+        const dynamicContent = document.getElementById('dynamicContent');
+        const contentBody = document.getElementById('contentBody');
+
+        demoAlert?.addEventListener('click', () => {
+            alert('🚨 This is a demo alert! Perfect for testing Supapup dialog overrides.');
+        });
+
+        demoPrompt?.addEventListener('click', () => {
+            const name = prompt('🤔 What is your name?', 'Demo User');
+            if (name) {
+                showDynamicContent(`Hello ${name}! This prompt was captured by Supapup.`);
+            }
+        });
+
+        demoFetch?.addEventListener('click', async () => {
+            showDynamicContent('🌐 Making API call...');
+            try {
+                const response = await fetch('https://api.github.com/users/octocat');
+                const data = await response.json();
+                showDynamicContent(`✅ API Success! User: ${data.name} (${data.public_repos} repos)`);
+                console.log('API Response:', data);
+            } catch (error) {
+                showDynamicContent('❌ API Error: ' + error.message);
+                console.error('API Error:', error);
+            }
+        });
+
+        demoError?.addEventListener('click', () => {
+            showDynamicContent('💥 Intentional error triggered!');
+            console.error('Demo Error: This is a test error for Supapup console monitoring');
+            throw new Error('This is a demo error for testing Supapup debugging capabilities');
+        });
+
+        function showDynamicContent(content) {
+            contentBody.textContent = content;
+            dynamicContent.style.display = 'block';
         }
 
         // Initialize bridge
