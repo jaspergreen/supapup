@@ -53,6 +53,18 @@ Thumbs.db
 tmp/
 temp/
 
+# Test files (temporary)
+test-*.md
+test-*.js
+test-*.html
+*-test.js
+*-test.html
+
+# Demo planning files (temporary)
+demo-plan.md
+demo-tasks.md
+*-demo-plan.md
+
 # Database files
 *.db
 *.db-shm
