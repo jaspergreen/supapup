@@ -4,6 +4,7 @@ export class DebuggingTools {
   private page: Page;
   private pausedParams: any = null;
   private client: CDPSession | null = null;
+  private pausedHandler: (params: any) => void = () => {};
 
   constructor(page: Page) {
     this.page = page;
@@ -18,16 +19,34 @@ export class DebuggingTools {
       // Enable debugger domain
       await this.client.send('Debugger.enable');
       
-      // Handle debugger paused events
-      this.client.on('Debugger.paused', (params: any) => {
+      // Store handler for cleanup
+      this.pausedHandler = (params: any) => {
         this.pausedParams = params;
         const callFrame = params.callFrames[0];
         // console.error(`🛑 Breakpoint hit at ${callFrame.url}:${callFrame.location.lineNumber}`);
         // console.error(`📍 Function: ${callFrame.functionName || 'anonymous'}`);
         // console.error(`🔍 Reason: ${params.reason}`);
-      });
+      };
+      
+      // Handle debugger paused events
+      this.client.on('Debugger.paused', this.pausedHandler);
     } catch (err) {
       // console.error('[DebuggingTools] CDP initialization error:', err);
+    }
+  }
+
+  // Cleanup method to remove event listeners and close CDP session
+  public async cleanup() {
+    if (this.client) {
+      if (this.pausedHandler) {
+        this.client.off('Debugger.paused', this.pausedHandler);
+      }
+      try {
+        await this.client.detach();
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+      this.client = null;
     }
   }
 
@@ -44,33 +63,82 @@ export class DebuggingTools {
       if (!this.client) throw new Error('CDP session not initialized');
       // Debugger already enabled in constructor
 
-      const breakpointParams: any = {
+      // Build location object according to CDP spec
+      const location: any = {
         lineNumber: lineNumber - 1,
-        condition: condition || undefined
+        columnNumber: 0
       };
 
       if (url && url !== 'inline') {
-        breakpointParams.url = url;
+        // Use setBreakpointByUrl for URL-based breakpoints
+        const result = await this.client.send('Debugger.setBreakpointByUrl', {
+          lineNumber: lineNumber - 1,
+          url: url,
+          columnNumber: 0,
+          condition: condition
+        });
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `🎯 Breakpoint set!\n\n` +
+                    `📍 Location: ${url}:${lineNumber}\n` +
+                    `🆔 ID: ${result.breakpointId}\n` +
+                    `⚡ Condition: ${condition || 'none'}\n`
+            },
+          ],
+        };
       } else {
-        const scriptResponse = await this.client.send('Runtime.evaluate', {
-          expression: 'document.scripts[0]?.src || "inline"'
-        }) as any;
-        breakpointParams.scriptId = scriptResponse.result?.objectId || 'script1';
+        // For inline scripts, we need to wait for the script to be parsed and use its scriptId
+        // First, enable script parsing events
+        await this.client.send('Debugger.enable');
+        
+        // Get all parsed scripts
+        const scripts: any[] = [];
+        this.client.on('Debugger.scriptParsed', (params) => {
+          scripts.push(params);
+        });
+        
+        // Force a page evaluation to ensure scripts are parsed
+        await this.page.evaluate(() => { /* Force script parsing */ });
+        
+        // Try using setBreakpointByUrl with the current page URL
+        // This should work for inline scripts in HTML files
+        const currentUrl = await this.page.url();
+        
+        try {
+          const result = await this.client.send('Debugger.setBreakpointByUrl', {
+            lineNumber: lineNumber - 1,
+            url: currentUrl,
+            urlRegex: undefined,
+            scriptHash: undefined,
+            columnNumber: 0,
+            condition: condition
+          });
+          
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `🎯 Breakpoint set!\n\n` +
+                      `📍 Location: ${currentUrl}:${lineNumber}\n` +
+                      `🆔 ID: ${result.breakpointId}\n` +
+                      `📌 Locations: ${result.locations?.length || 0} resolved\n` +
+                      `⚡ Condition: ${condition || 'none'}\n\n` +
+                      `⚠️ Note: For inline scripts, ensure line numbers are correct relative to the HTML file.`
+              },
+            ],
+          };
+        } catch (error) {
+          // If that fails, provide helpful error message
+          throw new Error(
+            `Failed to set breakpoint for inline script at line ${lineNumber}. ` +
+            `This is a Chrome DevTools Protocol limitation. ` +
+            `Consider moving your script to an external file or ensure the line number is correct.`
+          );
+        }
       }
-
-      const { breakpointId } = await this.client.send('Debugger.setBreakpoint', breakpointParams);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `🎯 Breakpoint set!\n\n` +
-                  `📍 Location: ${breakpointParams.url}:${lineNumber}\n` +
-                  `🆔 ID: ${breakpointId}\n` +
-                  `⚡ Condition: ${condition || 'none'}\n`
-          },
-        ],
-      };
     } catch (error: any) {
       throw new Error(`Failed to set breakpoint: ${error.message}`);
     }
@@ -222,8 +290,11 @@ export class DebuggingTools {
     try {
       const { lineNumber, triggerAction } = args;
       
-      // Set breakpoint
-      const breakpointResult = await this.setBreakpoint({ lineNumber });
+      // Get current page URL for breakpoint
+      const url = await this.page.url();
+      
+      // Set breakpoint with URL
+      const breakpointResult = await this.setBreakpoint({ lineNumber, url });
       const breakpointId = breakpointResult.content[0].text.match(/🆔 ID: ([^\n]+)/)?.[1];
       
       // Try to trigger the action if provided

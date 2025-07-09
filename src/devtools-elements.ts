@@ -12,6 +12,10 @@ export class DevToolsElements {
     console.log('[DevToolsElements] Initialized');
   }
 
+  isInitialized(): boolean {
+    return this.page !== null && this.client !== null;
+  }
+
   async inspectElement(args: { selector: string }) {
     if (!this.page || !this.client) {
       return {
@@ -161,7 +165,7 @@ export class DevToolsElements {
       return {
         content: [{ 
           type: 'text', 
-          text: '❌ DevTools not initialized. Please navigate to a page first.' 
+          text: '❌ DevTools Elements not initialized. Please wait a few seconds after navigation.' 
         }],
       };
     }
@@ -327,6 +331,11 @@ export class DevToolsElements {
           height: elementInfo.rect.height + 20,
         }
       });
+
+      // Validate element highlight screenshot
+      if (!screenshot || screenshot.length === 0) {
+        throw new Error(`Element highlight screenshot failed: Empty or invalid screenshot buffer for selector ${args.selector}`);
+      }
 
       return {
         content: [{ 
@@ -597,12 +606,29 @@ export class DevToolsElements {
         type: 'png'
       });
 
+      // Validate visual element map screenshot
+      if (!screenshot || screenshot.length === 0) {
+        throw new Error('Visual element map screenshot failed: Empty or invalid screenshot buffer');
+      }
+
       // Automatically open screenshot in new browser tab
       try {
         const browser = this.page.browser();
         const newPage = await browser.newPage();
         await newPage.goto(`data:image/png;base64,${screenshot}`);
         console.log('[Visual Element Map] Opened screenshot in new tab');
+        
+        // Wait 2 seconds to show screenshot, then switch back to original tab
+        setTimeout(async () => {
+          try {
+            if (this.page) {
+              await this.page.bringToFront();
+              console.log('[Visual Element Map] Switched back to original tab');
+            }
+          } catch (error) {
+            // console.error('[Visual Element Map] Failed to switch back to original tab:', error);
+          }
+        }, 2000);
       } catch (error) {
         // console.error('[Visual Element Map] Failed to open screenshot in tab:', error);
       }

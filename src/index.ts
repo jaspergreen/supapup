@@ -4,7 +4,82 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import { Browser, Page } from 'puppeteer';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { EventEmitter } from 'events';
+
+// Fix MaxListenersExceededWarning
+EventEmitter.defaultMaxListeners = 50;
+process.setMaxListeners(50);
+
+// Remove any existing warning listeners first
+process.removeAllListeners('warning');
+
+// Add our filtered warning handler
+process.on('warning', (warning) => {
+  const warningText = warning.toString();
+  
+  // Filter out MaxListenersExceededWarning completely
+  if (warningText.includes('MaxListenersExceededWarning') ||
+      warning.name === 'MaxListenersExceededWarning') {
+    return; // Ignore this warning
+  }
+  
+  // Filter out other Puppeteer/Chrome warnings
+  if (warningText.includes('Chrome') || 
+      warningText.includes('puppeteer') || 
+      warningText.includes('DevTools') ||
+      warningText.includes('Protocol error')) {
+    return;
+  }
+  
+  // For other warnings, output them
+  console.warn(warning);
+});
+
+// Also override emitWarning to catch it at the source
+const originalWarning = process.emitWarning;
+process.emitWarning = (warning: string | Error, options?: any) => {
+  const warningText = typeof warning === 'string' ? warning : warning.toString();
+  
+  // Filter out MaxListenersExceededWarning
+  if (warningText.includes('MaxListenersExceededWarning')) {
+    return;
+  }
+  // Filter out other Puppeteer/Chrome warnings
+  if (warningText.includes('Chrome') || 
+      warningText.includes('puppeteer') || 
+      warningText.includes('DevTools') ||
+      warningText.includes('Protocol error')) {
+    return;
+  }
+  // Call original warning for other warnings
+  originalWarning.call(process, warning, options);
+};
+
+// Suppress stderr output for Chrome/Puppeteer errors
+const originalStderrWrite = process.stderr.write;
+process.stderr.write = function(chunk: any, ...args: any[]): boolean {
+  const text = chunk?.toString() || '';
+  
+  // Filter out specific warning/error patterns
+  if (text.includes('DevTools listening') ||
+      text.includes('MaxListenersExceededWarning') ||
+      text.includes('Possible EventTarget memory leak detected') ||
+      text.includes('abort listeners added') ||
+      text.includes('(Use `node --trace-warnings') ||
+      text.includes('TargetCloseError') ||
+      text.includes('Protocol error') ||
+      (text.includes('[') && text.includes(']') && text.includes('ERROR')) ||
+      (text.includes('(node:') && text.includes(')')) || // Catches (node:12345) format
+      text.includes('Chrome') ||
+      text.includes('puppeteer')) {
+    return true;
+  }
+  // @ts-ignore
+  return originalStderrWrite.apply(process.stderr, [chunk, ...args]);
+};
 import { DevToolsMonitor } from './devtools.js';
 import { ResponsiveTester } from './responsive-testing.js';
 import { ActionMonitor } from './action-monitor.js';
@@ -12,12 +87,63 @@ import { AgentPageGenerator } from './agent-page-generator.js';
 import { HTMLParser } from './html-parser.js';
 import { DebuggingTools } from './debugging-tools.js';
 import { NetworkTools } from './network-tools.js';
+import { FormTools } from './form-tools.js';
+import { FormDetector } from './form-detector.js';
+import { HumanInteraction } from './human-interaction.js';
 import { PageAnalysis } from './page-analysis.js';
 import { DOMMonitor } from './dom-monitor.js';
 import { NavigationMonitor } from './navigation-monitor.js';
 import { DevToolsElements } from './devtools-elements.js';
 import { AgentPageScript } from './agent-page-script.js';
+import { StorageTools } from './storage-tools.js';
 import * as fs from 'fs';
+
+// Apply stealth plugin
+puppeteer.use(StealthPlugin());
+
+// Centralized CAPTCHA message generator
+function getCaptchaMessage(url: string, details?: {
+  detectionType?: 'url' | 'robot' | 'general';
+  robotTestResult?: any;
+}): any {
+  const { detectionType = 'general', robotTestResult } = details || {};
+  
+  let text = `🤖 Whoops! Seems like I am a robot... Any humans around?\n`;
+  
+  switch (detectionType) {
+    case 'url':
+      text += `⚠️ CAPTCHA detected - need human help!\n\n`;
+      break;
+    case 'robot':
+      text += `⚠️ Bot-blocking detected - need human help!\n\n`;
+      break;
+    default:
+      text += `⚠️ CAPTCHA/verification detected - need human help!\n\n`;
+  }
+  
+  text += `📍 Current URL: ${url}\n\n`;
+  
+  // Add robot test details if available
+  if (robotTestResult && detectionType === 'robot') {
+    text += `🔒 Bot-blocking mechanisms detected:\n` +
+            `   • Cross-origin iframes: ${robotTestResult.crossOriginIframes || 0}\n` +
+            `   • Protected elements: ${robotTestResult.protectedElements || 0}\n` +
+            `   • Anti-bot scripts: ${robotTestResult.hasAntiBot ? 'Yes' : 'No'}\n` +
+            `   • Human-only elements: ${robotTestResult.humanOnlyElements || 0}\n\n`;
+  }
+  
+  text += `👤 Hey human! Could you please:\n` +
+          `   1. Go to the browser window\n` +
+          `   2. Complete the CAPTCHA/verification challenge\n` +
+          `   3. I'll detect when you're done and continue automatically\n\n` +
+          `⏳ WAITING: This tool is now polling for CAPTCHA completion.\n` +
+          `🛑 AGENT: DO NOTHING. DO NOT CALL ANY TOOLS.\n` +
+          `The tool will automatically return when the user completes the CAPTCHA.`;
+  
+  return {
+    content: [{ type: 'text', text }]
+  };
+}
 
 export class SupapupServer {
   private server: Server;
@@ -30,6 +156,9 @@ export class SupapupServer {
   private networkTools: NetworkTools | null = null;
   private pageAnalysis: PageAnalysis | null = null;
   private devToolsElements: DevToolsElements | null = null;
+  private storageTools: StorageTools | null = null;
+  private formTools: FormTools | null = null;
+  private humanInteraction: HumanInteraction | null = null;
   private currentManifest: any = null;
   private screenshotChunkData: Map<string, any> | null = null;
 
@@ -53,7 +182,7 @@ export class SupapupServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
-          name: 'navigate',
+          name: 'browser_navigate',
           description: 'Navigate to a URL and generate agent page (auto-launches browser if needed)',
           inputSchema: {
             type: 'object',
@@ -64,7 +193,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'execute_action',
+          name: 'agent_execute_action',
           description: 'Execute an action on the agent page',
           inputSchema: {
             type: 'object',
@@ -76,7 +205,45 @@ export class SupapupServer {
           },
         },
         {
-          name: 'screenshot',
+          name: 'form_fill',
+          description: 'Fill an entire form with JSON data. Keys should match element IDs or data-mcp-ids',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              formData: { 
+                type: 'object', 
+                description: 'JSON object with field IDs as keys and values to fill',
+                additionalProperties: true
+              },
+              formId: { type: 'string', description: 'Optional form ID to target specific form' },
+              submitAfter: { type: 'boolean', description: 'Submit form after filling' },
+              validateRequired: { type: 'boolean', description: 'Check if required fields are filled' },
+            },
+            required: ['formData'],
+          },
+        },
+        {
+          name: 'form_detect',
+          description: 'Detect all forms on the page and get JSON templates with examples for form filling',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'form_ask_human',
+          description: 'Ask a human to visually identify an element by clicking on it',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              prompt: { type: 'string', description: 'What to ask the human (e.g., "Click on the squiggly animation at the bottom")' },
+              timeout: { type: 'number', description: 'Timeout in milliseconds (default: 30000)' },
+            },
+            required: ['prompt'],
+          },
+        },
+        {
+          name: 'screenshot_capture',
           description: 'Take a screenshot with advanced options',
           inputSchema: {
             type: 'object',
@@ -109,7 +276,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'screenshot_chunk',
+          name: 'screenshot_get_chunk',
           description: 'Get a specific chunk of a large screenshot that was automatically paginated',
           inputSchema: {
             type: 'object',
@@ -121,13 +288,13 @@ export class SupapupServer {
           },
         },
         {
-          name: 'close_browser',
+          name: 'browser_close',
           description: 'Close the browser instance',
           inputSchema: { type: 'object', properties: {} },
         },
         // Debugging tools
         {
-          name: 'set_breakpoint',
+          name: 'debug_set_breakpoint',
           description: 'Set a breakpoint at a specific line in JavaScript code',
           inputSchema: {
             type: 'object',
@@ -140,7 +307,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'remove_breakpoint',
+          name: 'debug_remove_breakpoint',
           description: 'Remove a previously set breakpoint',
           inputSchema: {
             type: 'object',
@@ -195,7 +362,7 @@ export class SupapupServer {
         },
         // Network and logging tools
         {
-          name: 'get_console_logs',
+          name: 'network_get_console_logs',
           description: 'Get console logs from the page',
           inputSchema: {
             type: 'object',
@@ -205,7 +372,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'get_network_logs',
+          name: 'network_get_logs',
           description: 'Get network request logs',
           inputSchema: {
             type: 'object',
@@ -216,7 +383,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'get_api_logs',
+          name: 'network_get_api_logs',
           description: 'Get detailed API request logs with headers, payload, response, and initiator',
           inputSchema: {
             type: 'object',
@@ -229,12 +396,12 @@ export class SupapupServer {
           },
         },
         {
-          name: 'clear_logs',
+          name: 'network_clear_logs',
           description: 'Clear console and network logs',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'replay_api_request',
+          name: 'network_replay_request',
           description: 'Replay an API request with modified payload/headers',
           inputSchema: {
             type: 'object',
@@ -249,7 +416,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'intercept_requests',
+          name: 'network_intercept_requests',
           description: 'Intercept and modify API requests before they are sent',
           inputSchema: {
             type: 'object',
@@ -274,32 +441,32 @@ export class SupapupServer {
         },
         // Page analysis tools
         {
-          name: 'get_page_state',
+          name: 'agent_get_page_state',
           description: 'Get the current state from the agent page',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'discover_actions',
+          name: 'agent_discover_actions',
           description: 'Get available actions from the agent page',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'get_page_resources',
+          name: 'page_get_resources',
           description: 'Get all page resources (scripts, stylesheets, images, links)',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'get_performance_metrics',
+          name: 'page_get_performance',
           description: 'Get page performance metrics',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'get_accessibility_tree',
+          name: 'page_get_accessibility',
           description: 'Get the accessibility tree of the page',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'inspect_element',
+          name: 'page_inspect_element',
           description: 'Inspect an element and get its properties, styles, and attributes',
           inputSchema: {
             type: 'object',
@@ -310,7 +477,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'evaluate_script',
+          name: 'page_evaluate_script',
           description: 'Execute JavaScript in the page context',
           inputSchema: {
             type: 'object',
@@ -321,7 +488,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'execute_and_wait',
+          name: 'page_execute_and_wait',
           description: 'Execute an action and wait for any changes',
           inputSchema: {
             type: 'object',
@@ -336,7 +503,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'generate_agent_page',
+          name: 'agent_generate_page',
           description: 'Generate agent page view of current webpage',
           inputSchema: {
             type: 'object',
@@ -347,7 +514,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'remap_page',
+          name: 'agent_remap_page',
           description: 'Re-scan and remap the current page after DOM changes (useful after AJAX updates)',
           inputSchema: {
             type: 'object',
@@ -358,7 +525,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'wait_for_changes',
+          name: 'agent_wait_for_changes',
           description: 'Wait for page changes (navigation, AJAX, DOM updates) and return new agent page',
           inputSchema: {
             type: 'object',
@@ -371,7 +538,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'get_agent_page_chunk',
+          name: 'agent_get_page_chunk',
           description: 'Get more elements when a page has too many to show at once. Use this after navigate shows "MORE ELEMENTS AVAILABLE"',
           inputSchema: {
             type: 'object',
@@ -455,7 +622,7 @@ export class SupapupServer {
           },
         },
         {
-          name: 'open_in_tab',
+          name: 'browser_open_in_tab',
           description: 'Open any content in a new browser tab (HTML, text, JSON, images, etc.)',
           inputSchema: {
             type: 'object',
@@ -471,27 +638,144 @@ export class SupapupServer {
             required: ['content'],
           },
         },
+        {
+          name: 'browser_list_tabs',
+          description: 'List all open browser tabs with their titles and URLs',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+        {
+          name: 'browser_switch_tab',
+          description: 'Switch to a specific browser tab by index',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              index: { type: 'number', description: 'Tab index (0-based) from list_tabs' },
+            },
+            required: ['index'],
+          },
+        },
+        // Storage management tools
+        {
+          name: 'storage_get',
+          description: 'Get localStorage, sessionStorage, and cookies for current page',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { 
+                type: 'string', 
+                enum: ['all', 'localStorage', 'sessionStorage', 'cookies'],
+                description: 'Type of storage to retrieve (default: all)' 
+              },
+            },
+          },
+        },
+        {
+          name: 'storage_set',
+          description: 'Set a value in localStorage or sessionStorage',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { 
+                type: 'string', 
+                enum: ['localStorage', 'sessionStorage'],
+                description: 'Storage type' 
+              },
+              key: { type: 'string', description: 'Storage key' },
+              value: { type: 'string', description: 'Storage value' },
+            },
+            required: ['type', 'key', 'value'],
+          },
+        },
+        {
+          name: 'storage_remove',
+          description: 'Remove a value from localStorage or sessionStorage',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { 
+                type: 'string', 
+                enum: ['localStorage', 'sessionStorage'],
+                description: 'Storage type' 
+              },
+              key: { type: 'string', description: 'Storage key to remove' },
+            },
+            required: ['type', 'key'],
+          },
+        },
+        {
+          name: 'storage_clear',
+          description: 'Clear storage data (localStorage, sessionStorage, cookies, or all)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { 
+                type: 'string', 
+                enum: ['all', 'localStorage', 'sessionStorage', 'cookies'],
+                description: 'What to clear (default: all)' 
+              },
+            },
+          },
+        },
+        {
+          name: 'storage_export_state',
+          description: 'Export complete storage state for session persistence',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
+          name: 'storage_import_state',
+          description: 'Import previously exported storage state',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              state: { 
+                type: 'object',
+                description: 'Storage state object from export_storage_state',
+                properties: {
+                  localStorage: { type: 'object' },
+                  sessionStorage: { type: 'object' },
+                  cookies: { type: 'array' },
+                },
+              },
+            },
+            required: ['state'],
+          },
+        },
+        {
+          name: 'storage_get_info',
+          description: 'Get storage usage and quota information',
+          inputSchema: { type: 'object', properties: {} },
+        },
       ],
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       switch (request.params.name) {
-        case 'navigate':
+        case 'browser_navigate':
           return await this.navigate(request.params.arguments || {});
-        case 'execute_action':
+        case 'agent_execute_action':
           return await this.executeAction(request.params.arguments || {});
-        case 'screenshot':
+        case 'form_fill':
+          return await this.fillForm(request.params.arguments || {});
+        case 'form_detect':
+          return await this.detectForms();
+        case 'form_ask_human':
+          return await this.askHuman(request.params.arguments || {});
+        case 'screenshot_capture':
           return await this.screenshot(request.params.arguments || {});
         case 'screenshot_paginated':
           return await this.screenshotPaginated(request.params.arguments || {});
-        case 'screenshot_chunk':
+        case 'screenshot_get_chunk':
           return await this.screenshotChunk(request.params.arguments || {});
-        case 'close_browser':
+        case 'browser_close':
           return await this.closeBrowser();
         // Debugging tools
-        case 'set_breakpoint':
+        case 'debug_set_breakpoint':
           return await this.debuggingTools!.setBreakpoint(request.params.arguments || {});
-        case 'remove_breakpoint':
+        case 'debug_remove_breakpoint':
           return await this.debuggingTools!.removeBreakpoint(request.params.arguments || {});
         case 'debug_continue':
           return await this.debuggingTools!.debugContinue();
@@ -506,42 +790,42 @@ export class SupapupServer {
         case 'debug_function':
           return await this.debuggingTools!.debugFunction(request.params.arguments || {});
         // Network and logging tools
-        case 'get_console_logs':
+        case 'network_get_console_logs':
           return await this.networkTools!.getConsoleLogs(request.params.arguments || {});
-        case 'get_network_logs':
+        case 'network_get_logs':
           return await this.networkTools!.getNetworkLogs(request.params.arguments || {});
-        case 'get_api_logs':
+        case 'network_get_api_logs':
           return await this.networkTools!.getAPILogs(request.params.arguments || {});
-        case 'clear_logs':
+        case 'network_clear_logs':
           return await this.networkTools!.clearLogs();
-        case 'replay_api_request':
+        case 'network_replay_request':
           return await this.networkTools!.replayAPIRequest(request.params.arguments || {});
-        case 'intercept_requests':
+        case 'network_intercept_requests':
           return await this.networkTools!.interceptRequests(request.params.arguments || {});
         // Page analysis tools
-        case 'get_page_state':
+        case 'agent_get_page_state':
           return await this.pageAnalysis!.getPageState();
-        case 'discover_actions':
+        case 'agent_discover_actions':
           return await this.pageAnalysis!.discoverActions();
-        case 'get_page_resources':
+        case 'page_get_resources':
           return await this.pageAnalysis!.getPageResources();
-        case 'get_performance_metrics':
+        case 'page_get_performance':
           return await this.pageAnalysis!.getPerformanceMetrics();
-        case 'get_accessibility_tree':
+        case 'page_get_accessibility':
           return await this.pageAnalysis!.getAccessibilityTree();
-        case 'inspect_element':
+        case 'page_inspect_element':
           return await this.pageAnalysis!.inspectElement(request.params.arguments || {});
-        case 'evaluate_script':
+        case 'page_evaluate_script':
           return await this.pageAnalysis!.evaluateScript(request.params.arguments || {});
-        case 'execute_and_wait':
+        case 'page_execute_and_wait':
           return await this.pageAnalysis!.executeAndWait(request.params.arguments || {});
-        case 'generate_agent_page':
+        case 'agent_generate_page':
           return await this.pageAnalysis!.generateAgentPage(request.params.arguments || {});
-        case 'remap_page':
+        case 'agent_remap_page':
           return await this.remapPage(request.params.arguments || {});
-        case 'wait_for_changes':
+        case 'agent_wait_for_changes':
           return await this.waitForChanges(request.params.arguments || {});
-        case 'get_agent_page_chunk':
+        case 'agent_get_page_chunk':
           return await this.getAgentPageChunk(request.params.arguments || {});
         // DevTools Elements tools
         case 'devtools_inspect_element':
@@ -552,10 +836,26 @@ export class SupapupServer {
           }
           return await this.devToolsElements.inspectElement(request.params.arguments as { selector: string });
         case 'devtools_modify_css':
+          if (!this.page || !this.browser) {
+            return {
+              content: [{ type: 'text', text: '❌ No browser or page loaded. Please navigate to a page first.' }],
+            };
+          }
           if (!this.devToolsElements) {
             return {
               content: [{ type: 'text', text: '❌ DevTools Elements not initialized. Please wait a few seconds after navigation.' }],
             };
+          }
+          // Try to initialize DevToolsElements if not already done
+          if (!this.devToolsElements.isInitialized()) {
+            try {
+              const client = await this.page.target().createCDPSession();
+              await this.devToolsElements.initialize(this.page, client);
+            } catch (err) {
+              return {
+                content: [{ type: 'text', text: '❌ Failed to initialize DevTools Elements. Please try again.' }],
+              };
+            }
           }
           return await this.devToolsElements.modifyCSS(request.params.arguments as { selector: string; property: string; value: string });
         case 'devtools_highlight_element':
@@ -586,8 +886,27 @@ export class SupapupServer {
             };
           }
           return await this.devToolsElements.createVisualElementMap(request.params.arguments as { includeAll?: boolean });
-        case 'open_in_tab':
+        case 'browser_open_in_tab':
           return await this.openInTab(request.params.arguments as { content: string; contentType?: string; title?: string });
+        case 'browser_list_tabs':
+          return await this.listTabs();
+        case 'browser_switch_tab':
+          return await this.switchTab(request.params.arguments as { index: number });
+        // Storage management
+        case 'storage_get':
+          return await this.getStorage(request.params.arguments as { type?: string });
+        case 'storage_set':
+          return await this.setStorage(request.params.arguments as { type: string; key: string; value: string });
+        case 'storage_remove':
+          return await this.removeStorage(request.params.arguments as { type: string; key: string });
+        case 'storage_clear':
+          return await this.clearStorage(request.params.arguments as { type?: string });
+        case 'storage_export_state':
+          return await this.exportStorageState();
+        case 'storage_import_state':
+          return await this.importStorageState(request.params.arguments as { state: any });
+        case 'storage_get_info':
+          return await this.getStorageInfo();
         default:
           throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -599,7 +918,31 @@ export class SupapupServer {
     try {
       this.browser = await puppeteer.launch({
         headless: args.headless ?? false,
-        args: ['--remote-debugging-port=9222'],
+        args: [
+          '--remote-debugging-port=9222',
+          // Stability flags only - let stealth plugin handle anti-detection
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--window-size=1920,1080',
+        ],
+      });
+
+      // Set up browser crash detection
+      this.browser.on('disconnected', () => {
+        console.error('[Browser] Browser disconnected/crashed!');
+        this.browser = null;
+        this.page = null;
+        // Clear all tool instances
+        this.devtools = null;
+        this.responsiveTester = null;
+        this.actionMonitor = null;
+        this.debuggingTools = null;
+        this.networkTools = null;
+        this.pageAnalysis = null;
+        this.devToolsElements = null;
+        this.storageTools = null;
       });
 
       // Get existing pages
@@ -615,6 +958,46 @@ export class SupapupServer {
       } else {
         this.page = await this.browser.newPage();
       }
+      
+      // Set up page crash detection
+      this.page.on('error', (error: Error) => {
+        console.error('[Page] Page crashed:', error);
+      });
+      
+      // Set up console error monitoring for JavaScript errors
+      this.page.on('console', (msg) => {
+        if (msg.type() === 'error') {
+          const text = msg.text();
+          // Detect memory-related errors
+          if (text.includes('out of memory') || text.includes('Maximum call stack')) {
+            console.error('[Page] Memory exhaustion detected:', text);
+          }
+        }
+      });
+      
+      // Intercept navigation attempts to prevent crashes
+      await this.page.setRequestInterception(true);
+      this.page.on('request', (request) => {
+        const url = request.url();
+        
+        // Log all navigation attempts for debugging
+        if (request.isNavigationRequest()) {
+          console.error(`[Navigation] Attempting to navigate to: ${url}`);
+          
+          // Block suspicious navigation patterns that might cause crashes
+          if (url.includes('about:blank#blocked') || 
+              url.includes('chrome-error://') ||
+              url.includes('javascript:') ||
+              (url === 'about:blank' && request.frame() !== this.page?.mainFrame())) {
+            console.error(`[Navigation] Blocked suspicious navigation: ${url}`);
+            request.abort();
+            return;
+          }
+        }
+        
+        request.continue();
+      });
+      
       
       // Wait for page to be fully ready before proceeding
       // // console.error('[LaunchBrowser] Waiting for page to be ready...');
@@ -661,18 +1044,335 @@ export class SupapupServer {
     try {
       // console.error(`[Navigate] Starting navigation to ${args.url}`);
       const startTime = Date.now();
-
-      await this.page.goto(args.url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000,
+      
+      // Track redirects to prevent infinite loops
+      let redirectCount = 0;
+      const maxRedirects = 10;
+      const visitedUrls = new Set<string>();
+      
+      // Set up redirect tracking
+      const onResponse = (response: any) => {
+        const status = response.status();
+        const url = response.url();
+        
+        // Track redirects
+        if (status >= 300 && status < 400) {
+          redirectCount++;
+          // console.error(`[Navigate] Redirect ${redirectCount}: ${url}`);
+          
+          // Check for redirect loops
+          if (visitedUrls.has(url)) {
+            throw new Error(`Redirect loop detected: ${url}`);
+          }
+          visitedUrls.add(url);
+          
+          if (redirectCount > maxRedirects) {
+            throw new Error(`Too many redirects (${redirectCount}). Possible infinite redirect attack.`);
+          }
+        }
+      };
+      
+      this.page.on('response', onResponse);
+      
+      // Inject enhanced dialog overrides before navigation
+      await this.page.evaluateOnNewDocument(() => {
+        (function() {
+          // Helper functions for agents
+          (window as any).click_alert = function(index: number) {
+            const alerts = document.querySelectorAll('[data-mcp-type="alert"]');
+            if (alerts[index - 1]) {
+              const okBtn = alerts[index - 1].querySelector('[data-mcp-id="alert-ok"]') as HTMLElement;
+              if (okBtn) { okBtn.click(); return true; }
+            }
+            return false;
+          };
+          
+          (window as any).fill_prompt = function(index: number, value: string) {
+            const prompts = document.querySelectorAll('[data-mcp-type="prompt"]');
+            if (prompts[index - 1]) {
+              const input = prompts[index - 1].querySelector('[data-mcp-id="prompt-input"]') as HTMLInputElement;
+              if (input) {
+                input.value = value;
+                input.style.background = '#ffffaa';
+                return true;
+              }
+            }
+            return false;
+          };
+          
+          (window as any).click_prompt = function(index: number, accept: boolean) {
+            const prompts = document.querySelectorAll('[data-mcp-type="prompt"]');
+            if (prompts[index - 1]) {
+              const btn = accept ? 
+                prompts[index - 1].querySelector('[data-mcp-id="prompt-ok"]') :
+                prompts[index - 1].querySelector('[data-mcp-id="prompt-cancel"]');
+              if (btn) { (btn as HTMLElement).click(); return true; }
+            }
+            return false;
+          };
+          
+          (window as any).click_confirm = function(index: number, accept: boolean) {
+            const confirms = document.querySelectorAll('[data-mcp-type="confirm"]');
+            if (confirms[index - 1]) {
+              const btn = accept ? 
+                confirms[index - 1].querySelector('[data-mcp-id="confirm-ok"]') :
+                confirms[index - 1].querySelector('[data-mcp-id="confirm-cancel"]');
+              if (btn) { (btn as HTMLElement).click(); return true; }
+            }
+            return false;
+          };
+          
+          (window as any).list_dialogs = function() {
+            const alerts = document.querySelectorAll('[data-mcp-type="alert"]');
+            const prompts = document.querySelectorAll('[data-mcp-type="prompt"]');
+            const confirms = document.querySelectorAll('[data-mcp-type="confirm"]');
+            return { alerts: alerts.length, prompts: prompts.length, confirms: confirms.length };
+          };
+          
+          // Enhanced dialog overrides
+          window.alert = function(message) {
+            console.log('[MCP] Alert intercepted:', message);
+            const alertNum = document.querySelectorAll('[data-mcp-type="alert"]').length + 1;
+            const alertDiv = document.createElement('div');
+            alertDiv.id = 'mcp-alert-' + Date.now();
+            alertDiv.setAttribute('data-mcp-id', 'alert-dialog-' + alertNum);
+            alertDiv.setAttribute('data-mcp-type', 'alert');
+            alertDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#ff4444;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:300px;';
+            alertDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;">🚨 Alert #' + alertNum + '</div><div style="margin-bottom:10px;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.8;">Agent: Use click_alert(' + alertNum + ') to dismiss</div><button data-mcp-id="alert-ok" onclick="this.parentElement.remove();" style="background:white;color:#ff4444;border:none;padding:5px 10px;border-radius:3px;">OK</button>';
+            document.body.appendChild(alertDiv);
+            console.log('[MCP] Alert helper: click_alert(' + alertNum + ')');
+            return undefined;
+          };
+          
+          window.prompt = function(message, defaultValue) {
+            console.log('[MCP] Prompt intercepted:', message);
+            const promptNum = document.querySelectorAll('[data-mcp-type="prompt"]').length + 1;
+            const promptDiv = document.createElement('div');
+            promptDiv.id = 'mcp-prompt-' + Date.now();
+            promptDiv.setAttribute('data-mcp-id', 'prompt-dialog-' + promptNum);
+            promptDiv.setAttribute('data-mcp-type', 'prompt');
+            promptDiv.style.cssText = 'position:fixed;top:20px;left:20px;background:#44ff44;color:black;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:350px;';
+            promptDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;color:black;">📝 Prompt #' + promptNum + '</div><div style="margin-bottom:10px;color:black;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.7;color:black;">Agent: fill_prompt(' + promptNum + ', "text") then click_prompt(' + promptNum + ', true)</div><input type="text" data-mcp-id="prompt-input" value="' + (defaultValue || '') + '" style="width:250px;padding:5px;margin-bottom:10px;border:1px solid #ccc;border-radius:3px;"><br><button data-mcp-id="prompt-ok" onclick="this.parentElement.remove();" style="background:#44ff44;color:white;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="prompt-cancel" onclick="this.parentElement.remove();" style="background:#ff4444;color:white;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
+            document.body.appendChild(promptDiv);
+            console.log('[MCP] Prompt helpers: fill_prompt(' + promptNum + ', "text"), click_prompt(' + promptNum + ', true/false)');
+            return null;
+          };
+          
+          window.confirm = function(message) {
+            console.log('[MCP] Confirm intercepted:', message);
+            const confirmNum = document.querySelectorAll('[data-mcp-type="confirm"]').length + 1;
+            const confirmDiv = document.createElement('div');
+            confirmDiv.id = 'mcp-confirm-' + Date.now();
+            confirmDiv.setAttribute('data-mcp-id', 'confirm-dialog-' + confirmNum);
+            confirmDiv.setAttribute('data-mcp-type', 'confirm');
+            confirmDiv.style.cssText = 'position:fixed;top:80px;right:20px;background:#4444ff;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:300px;';
+            confirmDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;">❓ Confirm #' + confirmNum + '</div><div style="margin-bottom:10px;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.8;">Agent: click_confirm(' + confirmNum + ', true) or click_confirm(' + confirmNum + ', false)</div><button data-mcp-id="confirm-ok" onclick="this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="confirm-cancel" onclick="this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
+            document.body.appendChild(confirmDiv);
+            console.log('[MCP] Confirm helper: click_confirm(' + confirmNum + ', true/false)');
+            return false;
+          };
+          
+          console.log('[MCP] Enhanced dialog overrides with helper functions installed');
+        })();
       });
 
+      // Inject agent page interface before navigation
+      await this.page.evaluateOnNewDocument(() => {
+        // Create window.__AGENT_PAGE__ interface
+        (window as any).__AGENT_PAGE__ = {
+          version: '2.0.0',
+          generated: new Date().toISOString(),
+          manifest: null,
+          
+          execute: function(actionId: string, params: any) {
+            const element = document.querySelector('[data-mcp-id="' + actionId + '"]');
+            if (!element) throw new Error('Element not found: ' + actionId);
+            
+            const action = element.getAttribute('data-mcp-action');
+            
+            if (action === 'fill') {
+              if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+                element.value = params.value || '';
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            } else if (action === 'click') {
+              element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            } else if (action === 'check') {
+              if (element instanceof HTMLInputElement && element.type === 'checkbox') {
+                element.checked = params.checked !== false;
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            } else if (action === 'toggle') {
+              if (element instanceof HTMLInputElement) {
+                const inputType = element.type;
+                
+                if (inputType === 'checkbox') {
+                  // For checkboxes, toggle the checked state
+                  // If params.value is provided, use that; otherwise toggle current state
+                  if (params && params.value !== undefined) {
+                    element.checked = Boolean(params.value);
+                  } else {
+                    element.checked = !element.checked;
+                  }
+                  
+                  // Dispatch proper events for form validation
+                  element.dispatchEvent(new Event('change', { bubbles: true }));
+                  element.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (inputType === 'radio') {
+                  // For radio buttons, always set to checked
+                  element.checked = true;
+                  element.dispatchEvent(new Event('change', { bubbles: true }));
+                  element.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              } else {
+                // For other elements with toggle action, fall back to click
+                (element as HTMLElement).click();
+              }
+            } else if (action === 'select' || action === 'choose') {
+              if (element instanceof HTMLSelectElement) {
+                const selectEl = element as HTMLSelectElement;
+                const inputValue = params.value || '';
+                
+                // Try to find option by value first
+                let option = Array.from(selectEl.options).find(opt => opt.value === inputValue);
+                
+                // If not found by value, try by display text (case-insensitive)
+                if (!option && inputValue) {
+                  option = Array.from(selectEl.options).find(opt => 
+                    opt.textContent?.trim().toLowerCase() === inputValue.toLowerCase()
+                  );
+                }
+                
+                // If still not found, try partial match on display text
+                if (!option && inputValue) {
+                  option = Array.from(selectEl.options).find(opt => 
+                    opt.textContent?.trim().toLowerCase().includes(inputValue.toLowerCase())
+                  );
+                }
+                
+                if (option) {
+                  selectEl.value = option.value;
+                  selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                  throw new Error(`No option found for "${inputValue}". Available options: ${Array.from(selectEl.options).filter(opt => opt.value).map(opt => `"${opt.textContent?.trim()}" (${opt.value})`).join(', ')}`);
+                }
+              }
+            }
+            
+            return { success: true, action: action };
+          }
+        };
+        
+        console.log('[MCP] Agent page interface installed');
+      });
+      
+      try {
+        await this.page.goto(args.url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000, // Reduced timeout to prevent hanging
+        });
+      } catch (error: any) {
+        // Clean up listener
+        this.page.off('response', onResponse);
+        
+        // Check if it's a navigation timeout
+        if (error.message?.includes('timeout') || error.message?.includes('Navigation timeout')) {
+          return {
+            content: [{
+              type: 'text',
+              text: `❌ Navigation timeout - the page took too long to load or may be under attack.\nThis could be due to:\n- Infinite redirect loops\n- JavaScript that never completes\n- Deliberate anti-bot measures\n\nError: ${error.message}`
+            }]
+          };
+        }
+        throw error;
+      } finally {
+        // Always clean up the listener
+        this.page.off('response', onResponse);
+      }
+
       // console.error(`[Navigate] Page loaded in ${Date.now() - startTime}ms`);
+      
+      // IMMEDIATE CAPTCHA CHECK - Test for bot-blocking mechanisms
+      const pageUrl = this.page.url();
+      
+      // Always do the robot test - it's more reliable than URL patterns
+      // This tests what bots actually can't do, not just URL patterns
+      const robotTestResult = await this.page.evaluate(() => {
+        try {
+          // Test 1: Check for cross-origin iframes (CAPTCHA isolation)
+          const iframes = Array.from(document.querySelectorAll('iframe'));
+          const crossOriginIframes = iframes.filter(iframe => {
+            try {
+              // This will throw if cross-origin (CAPTCHA security mechanism)
+              const src = iframe.src;
+              return src && (
+                src.includes('recaptcha') || 
+                src.includes('hcaptcha') || 
+                src.includes('captcha') ||
+                src.includes('challenge')
+              );
+            } catch (e) {
+              return true; // Cross-origin access blocked = likely CAPTCHA
+            }
+          });
+          
+          // Test 2: Check for elements that can't be interacted with programmatically
+          const protectedElements = document.querySelectorAll([
+            '.g-recaptcha',
+            '.h-captcha', 
+            '[data-sitekey]',
+            '.cf-challenge-form',
+            '.challenge-form'
+          ].join(','));
+          
+          // Test 3: Check for anti-automation scripts
+          const scripts = Array.from(document.querySelectorAll('script'));
+          const hasAntiBot = scripts.some(script => {
+            const src = script.src || script.textContent || '';
+            return src.includes('recaptcha') || 
+                   src.includes('hcaptcha') || 
+                   src.includes('anti-bot') ||
+                   src.includes('challenge');
+          });
+          
+          // Test 4: Check for elements that require human interaction
+          const humanOnlyElements = document.querySelectorAll([
+            'iframe[title*="reCAPTCHA"]',
+            'iframe[title*="hCaptcha"]',
+            'iframe[src*="recaptcha"]',
+            'iframe[src*="hcaptcha"]',
+            '.captcha-container',
+            '.verification-container'
+          ].join(','));
+          
+          return {
+            crossOriginIframes: crossOriginIframes.length,
+            protectedElements: protectedElements.length,
+            hasAntiBot,
+            humanOnlyElements: humanOnlyElements.length,
+            isRobotBlocked: crossOriginIframes.length > 0 || protectedElements.length > 0 || hasAntiBot || humanOnlyElements.length > 0
+          };
+        } catch (error) {
+          // If we can't even run this test, it's likely a CAPTCHA page
+          return { isRobotBlocked: true, error: String(error) };
+        }
+      });
+      
+      if (robotTestResult.isRobotBlocked) {
+        return getCaptchaMessage(pageUrl, { 
+          detectionType: 'robot',
+          robotTestResult 
+        });
+      }
       
       // Initialize tools after navigation is complete
       if (!this.devtools) {
         // Wait a bit longer for page to stabilize
         await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Clean up existing tools before creating new ones
+        await this.cleanupTools();
         
         this.devtools = new DevToolsMonitor(this.page);
         this.responsiveTester = new ResponsiveTester();
@@ -681,6 +1381,9 @@ export class SupapupServer {
         this.networkTools = new NetworkTools(this.page);
         this.pageAnalysis = new PageAnalysis(this.page);
         this.devToolsElements = new DevToolsElements();
+        this.formTools = new FormTools(this.page);
+        this.humanInteraction = new HumanInteraction(this.page);
+        this.storageTools = new StorageTools();
         
         // Initialize DevToolsElements with CDP session immediately
         try {
@@ -691,11 +1394,15 @@ export class SupapupServer {
           // console.error('[Navigate] DevToolsElements CDP setup error:', err);
         }
         
+        // Initialize StorageTools
+        await this.storageTools.initialize(this.page);
+        
         // console.error(`[Navigate] Tools initialized`);
       }
       
       // Wait a bit for dynamic content
       await new Promise(resolve => setTimeout(resolve, 1000));
+      
 
       // Generate manifest and tag elements directly in the browser
       const scriptStart = Date.now();
@@ -744,19 +1451,44 @@ export class SupapupServer {
       
       // Check if we landed on a CAPTCHA page
       const currentUrl = this.page.url();
-      const title = await this.page.title();
-      const captchaIndicators = [
-        'sorry/index',
-        'recaptcha',
-        'captcha',
-        'unusual traffic',
-        'automated requests'
-      ];
       
-      const isCaptcha = captchaIndicators.some(indicator => 
-        currentUrl.toLowerCase().includes(indicator) ||
-        title.toLowerCase().includes(indicator)
-      );
+      // Fast check: Look for specific CAPTCHA elements in DOM first
+      const hasCaptchaElements = await this.page.evaluate(() => {
+        const captchaSelectors = [
+          '.g-recaptcha',
+          '#recaptcha',
+          '[data-sitekey]',
+          'iframe[src*="recaptcha"]',
+          'iframe[title*="reCAPTCHA"]',
+          '.cf-challenge-form',
+          '.challenge-form',
+          'div[class*="captcha"]',
+          'div[id*="captcha"]',
+          '.h-captcha',
+          'iframe[src*="hcaptcha"]'
+        ];
+        
+        return captchaSelectors.some(selector => document.querySelector(selector) !== null);
+      });
+      
+      let isCaptcha = hasCaptchaElements;
+      
+      if (!isCaptcha) {
+        // Fallback: URL and title-based detection
+        const title = await this.page.title();
+        const captchaIndicators = [
+          'sorry/index',
+          'recaptcha',
+          'captcha',
+          'unusual traffic',
+          'automated requests'
+        ];
+        
+        isCaptcha = captchaIndicators.some(indicator => 
+          currentUrl.toLowerCase().includes(indicator) ||
+          title.toLowerCase().includes(indicator)
+        );
+      }
       
       if (isCaptcha) {
         return {
@@ -824,6 +1556,20 @@ export class SupapupServer {
       // Store original URL before action
       const originalUrl = this.page.url();
       
+      // Setup MutationObserver before action (unless explicitly disabled)
+      const shouldWait = args.waitForChanges !== false;
+      
+      if (shouldWait) {
+        await this.page.evaluate(() => {
+          (window as any).__MUTATION_DETECTED__ = false;
+          const observer = new MutationObserver(() => {
+            (window as any).__MUTATION_DETECTED__ = true;
+          });
+          observer.observe(document.body, {childList: true, subtree: true, attributes: true});
+          (window as any).__MUTATION_OBSERVER__ = observer;
+        });
+      }
+      
       // Execute the action
       const result = await this.page.evaluate(
         (actionId: string, params: any) => {
@@ -837,17 +1583,8 @@ export class SupapupServer {
         args.params || {}
       );
 
-      // Check if we should wait for DOM changes
-      const shouldWait = args.waitForChanges !== false && 
-                        (result.element?.includes('submit') || 
-                         result.element?.includes('search') ||
-                         result.element?.includes('button') ||
-                         args.waitForChanges === true);
-
       if (shouldWait) {
-        // console.error(`[ExecuteAction] Waiting for changes after ${args.actionId}...`);
-        
-        // First, wait a bit to see if navigation starts
+        // Wait a bit for mutations to occur
         await new Promise(resolve => setTimeout(resolve, 300));
         
         // Check for navigation/redirect FIRST
@@ -855,12 +1592,18 @@ export class SupapupServer {
         
         let changed = false;
         if (!navCheck.navigated) {
-          // Only wait for DOM changes if no navigation occurred
-          changed = await DOMMonitor.waitForChangesAndRemap(this.page, {
-            timeout: args.waitTimeout || 5000,
-            waitForSelector: args.waitForSelector,
-            debounceMs: 500
+          // Check if mutations were detected
+          const mutationsDetected = await this.page.evaluate(() => {
+            const detected = (window as any).__MUTATION_DETECTED__;
+            (window as any).__MUTATION_OBSERVER__?.disconnect();
+            return detected;
           });
+          
+          if (mutationsDetected) {
+            // Wait for DOM to settle after mutations
+            await new Promise(resolve => setTimeout(resolve, 500));
+            changed = true;
+          }
         }
         
         if (navCheck.navigated) {
@@ -976,6 +1719,388 @@ export class SupapupServer {
     }
   }
 
+  private async fillForm(args: any) {
+    if (!this.page) {
+      throw new Error('No page loaded. Navigate to a page first.');
+    }
+
+    if (!this.formTools) {
+      throw new Error('Form tools not initialized');
+    }
+
+    try {
+      const result = await this.formTools.fillForm(
+        args.formData || {},
+        {
+          formId: args.formId,
+          submitAfter: args.submitAfter || false,
+          validateRequired: args.validateRequired || false
+        }
+      );
+
+      // Format response
+      let response = result.success ? '✅ Form filled successfully\n\n' : '❌ Form fill failed\n\n';
+      
+      if (result.filled.length > 0) {
+        response += `📝 Filled fields (${result.filled.length}):\n`;
+        result.filled.forEach(field => {
+          response += `  • ${field}\n`;
+        });
+        response += '\n';
+      }
+
+      if (result.warnings.length > 0) {
+        response += `⚠️ Warnings:\n`;
+        result.warnings.forEach(warning => {
+          response += `  • ${warning}\n`;
+        });
+        response += '\n';
+      }
+
+      if (result.errors.length > 0) {
+        response += `❌ Errors:\n`;
+        result.errors.forEach(error => {
+          response += `  • ${error}\n`;
+        });
+      }
+
+      // If form was submitted, wait for navigation
+      if (args.submitAfter && result.success) {
+        try {
+          await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 5000 });
+          response += '\n✅ Form submitted and navigation completed';
+        } catch (e) {
+          // No navigation occurred, might be AJAX form
+          response += '\n📋 Form submitted (no navigation detected - may be AJAX)';
+        }
+      }
+
+      return {
+        content: [{ type: 'text', text: response }]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Form fill error: ${error}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async detectForms() {
+    if (!this.page) {
+      throw new Error('No page loaded. Navigate to a page first.');
+    }
+
+    try {
+      // Inject FormDetector and run detection
+      const forms = await this.page.evaluate(() => {
+        // Inline the FormDetector class for browser execution
+        class FormDetector {
+          static detectForms() {
+            const forms: any[] = [];
+            
+            // Find all elements with form fields
+            const containers = [];
+            containers.push(...Array.from(document.querySelectorAll('form')));
+            
+            // Also find divs with multiple form fields
+            const potentialContainers = document.querySelectorAll('div, section');
+            potentialContainers.forEach(container => {
+              const fields = container.querySelectorAll('[data-mcp-id][data-mcp-action="fill"], [data-mcp-id][data-mcp-action="choose"], [data-mcp-id][data-mcp-action="toggle"]');
+              if (fields.length >= 3 && !container.querySelector('form')) {
+                containers.push(container);
+              }
+            });
+            
+            containers.forEach((container, index) => {
+              const fields = this.extractFields(container);
+              if (fields.length > 0) {
+                const formId = container.id || `form-${index}`;
+                const formName = this.getFormName(container, fields);
+                
+                forms.push({
+                  formId,
+                  formName,
+                  fields,
+                  jsonTemplate: this.generateTemplate(fields),
+                  example: this.generateExample(fields),
+                  description: `${formName}: ${fields.length} fields (${fields.filter(f => f.required).length} required)`
+                });
+              }
+            });
+            
+            return forms;
+          }
+          
+          static extractFields(container: any) {
+            const fields: any[] = [];
+            const inputs = container.querySelectorAll('[data-mcp-id]');
+            
+            inputs.forEach((element: any) => {
+              const action = element.getAttribute('data-mcp-action');
+              if (!['fill', 'choose', 'toggle', 'select'].includes(action)) return;
+              
+              const label = this.getLabel(element);
+              const field = {
+                id: element.getAttribute('data-mcp-id'),
+                type: element.getAttribute('data-mcp-type') || element.type || element.tagName.toLowerCase(),
+                label: label,
+                required: element.hasAttribute('required') || (label && label.includes('*')),
+                placeholder: element.placeholder,
+                value: element.value
+              };
+              
+              if (element.tagName === 'SELECT') {
+                (field as any).options = Array.from(element.options).map((opt: any) => opt.value).filter((v: any) => v);
+              }
+              
+              fields.push(field);
+            });
+            
+            return fields;
+          }
+          
+          static getLabel(element: any) {
+            // Try to find associated label
+            if (element.id) {
+              const label = document.querySelector(`label[for="${element.id}"]`);
+              if (label) return label.textContent?.trim() || '';
+            }
+            
+            // Check parent label
+            const parentLabel = element.closest('label');
+            if (parentLabel) {
+              const clone = parentLabel.cloneNode(true);
+              const input = clone.querySelector('input, select, textarea');
+              if (input) input.remove();
+              return clone.textContent.trim();
+            }
+            
+            // Check previous sibling
+            const prev = element.previousElementSibling;
+            if (prev && prev.tagName === 'LABEL') {
+              return prev.textContent.trim();
+            }
+            
+            return '';
+          }
+          
+          static getFormName(container: any, fields: any[]) {
+            // Check for heading
+            const heading = container.querySelector('h1, h2, h3, h4, h5, h6');
+            if (heading) return heading.textContent.trim();
+            
+            // Infer from fields
+            const hasEmail = fields.some((f: any) => f.type === 'email');
+            const hasPassword = fields.some((f: any) => f.type === 'password');
+            
+            if (hasEmail && hasPassword) {
+              const hasName = fields.some((f: any) => f.label.toLowerCase().includes('name'));
+              return hasName ? 'Registration Form' : 'Login Form';
+            }
+            
+            return 'Form';
+          }
+          
+          static generateTemplate(fields: any[]) {
+            const template: any = {};
+            fields.forEach((field: any) => {
+              let type = '<string>';
+              switch (field.type) {
+                case 'email': type = '<email>'; break;
+                case 'password': type = '<password>'; break;
+                case 'phone':
+                case 'tel': type = '<phone>'; break;
+                case 'number': type = '<number>'; break;
+                case 'checkbox': type = '<boolean>'; break;
+                case 'select': 
+                  type = field.options ? `<${field.options.slice(0, 3).join('|')}>` : '<option>';
+                  break;
+              }
+              template[field.id] = field.required ? `${type} (required)` : `${type} (optional)`;
+            });
+            return template;
+          }
+          
+          static generateExample(fields: any[]) {
+            const example: any = {};
+            fields.forEach((field: any) => {
+              if (!field.required) return;
+              
+              switch (field.type) {
+                case 'email': example[field.id] = 'user@example.com'; break;
+                case 'password': example[field.id] = 'SecurePass123!'; break;
+                case 'phone':
+                case 'tel': example[field.id] = '+1 (555) 123-4567'; break;
+                case 'text':
+                  if (field.label.toLowerCase().includes('first')) {
+                    example[field.id] = 'John';
+                  } else if (field.label.toLowerCase().includes('last')) {
+                    example[field.id] = 'Doe';
+                  } else if (field.label.toLowerCase().includes('address')) {
+                    example[field.id] = '123 Main Street';
+                  } else if (field.label.toLowerCase().includes('city')) {
+                    example[field.id] = 'New York';
+                  } else {
+                    example[field.id] = 'Example text';
+                  }
+                  break;
+                case 'number': example[field.id] = 123; break;
+                case 'checkbox': example[field.id] = true; break;
+                case 'select': 
+                  if (field.options && field.options.length > 0) {
+                    example[field.id] = field.options[0];
+                  }
+                  break;
+                default: example[field.id] = 'example';
+              }
+            });
+            return example;
+          }
+        }
+        
+        return FormDetector.detectForms();
+      });
+
+      // Format response
+      let response = `📋 FORM DETECTION RESULTS\n`;
+      response += `${'='.repeat(40)}\n\n`;
+
+      if (forms.length === 0) {
+        response += '❌ No forms detected on this page\n';
+      } else {
+        response += `Found ${forms.length} form${forms.length > 1 ? 's' : ''} on this page:\n\n`;
+
+        forms.forEach((form, index) => {
+          response += `📝 ${index + 1}. ${form.formName}\n`;
+          response += `   ID: ${form.formId}\n`;
+          response += `   ${form.description}\n\n`;
+          
+          response += `   JSON Template:\n`;
+          response += '   ```json\n';
+          response += '   ' + JSON.stringify(form.jsonTemplate, null, 2).split('\n').join('\n   ') + '\n';
+          response += '   ```\n\n';
+          
+          response += `   Example (required fields only):\n`;
+          response += '   ```json\n';
+          response += '   ' + JSON.stringify(form.example, null, 2).split('\n').join('\n   ') + '\n';
+          response += '   ```\n\n';
+          
+          response += `   To fill this form:\n`;
+          response += `   fill_form({\n`;
+          response += `     formData: ${JSON.stringify(form.example)},\n`;
+          response += `     formId: "${form.formId}",\n`;
+          response += `     submitAfter: true\n`;
+          response += `   })\n\n`;
+        });
+      }
+
+      response += `💡 Tips:\n`;
+      response += `• Use detect_forms to understand form structure\n`;
+      response += `• Copy the example JSON and modify values as needed\n`;
+      response += `• Set submitAfter: true to submit after filling\n`;
+      response += `• The formId parameter is optional if there's only one form\n`;
+
+      return {
+        content: [{ type: 'text', text: response }]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Form detection error: ${error}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async askHuman(args: any) {
+    if (!this.page) {
+      throw new Error('No page loaded. Navigate to a page first.');
+    }
+
+    if (!this.humanInteraction) {
+      throw new Error('Human interaction tools not initialized');
+    }
+
+    try {
+      const prompt = args.prompt || 'Please click on the element you want to identify';
+      const timeout = args.timeout || 30000;
+
+      // Take a screenshot before asking
+      const beforeScreenshot = await this.page.screenshot({ encoding: 'base64' });
+
+      const result = await this.humanInteraction.askHumanToIdentifyElement(prompt, timeout);
+
+      let response = `🤖 HUMAN ELEMENT IDENTIFICATION\n`;
+      response += `${'='.repeat(40)}\n\n`;
+
+      if (result.success && result.element) {
+        response += `✅ Element successfully identified!\n\n`;
+        
+        response += `📍 Element Details:\n`;
+        response += `  • Selector: ${result.element.selector}\n`;
+        response += `  • Tag: ${result.element.tagName}\n`;
+        response += `  • Class: ${result.element.className || '(none)'}\n`;
+        response += `  • Text: ${result.element.text || '(no text)'}\n`;
+        response += `  • Position: ${result.element.position.x}, ${result.element.position.y} (${result.element.position.width}x${result.element.position.height})\n`;
+        response += `  • Human Selection ID: ${result.element.id}\n\n`;
+
+        // Add data-mcp-id if element doesn't have one
+        const hasMcpId = await this.page.evaluate((selector) => {
+          const element = document.querySelector(`[data-human-selected="${selector}"]`);
+          if (element && !element.hasAttribute('data-mcp-id')) {
+            const id = `human-identified-${Date.now()}`;
+            element.setAttribute('data-mcp-id', id);
+            element.setAttribute('data-mcp-type', 'human-selected');
+            element.setAttribute('data-mcp-action', 'click');
+            return id;
+          }
+          return element?.getAttribute('data-mcp-id') || null;
+        }, result.element.id);
+
+        if (hasMcpId) {
+          response += `🎯 Element tagged with MCP ID: ${hasMcpId}\n`;
+          response += `   You can now interact with it using:\n`;
+          response += `   execute_action({actionId: "${hasMcpId}"})\n\n`;
+        }
+
+        // Take screenshot after selection
+        const afterScreenshot = await this.page.screenshot({ encoding: 'base64' });
+        
+        response += `📸 Screenshots captured (before and after selection)\n`;
+        response += `💡 The element has been highlighted and marked for future reference\n`;
+
+        // Remap the page to include the new element
+        await this.remapPage({});
+        
+      } else if (result.cancelled) {
+        response += `❌ Selection cancelled by user\n`;
+      } else {
+        response += `❌ Failed to identify element: ${result.error || 'Unknown error'}\n`;
+      }
+
+      return {
+        content: [{ type: 'text', text: response }]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Human interaction error: ${error}`,
+          },
+        ],
+      };
+    }
+  }
+
   private async remapPage(args: any) {
     if (!this.page) {
       throw new Error('No page loaded. Navigate to a page first.');
@@ -1043,26 +2168,72 @@ export class SupapupServer {
     try {
       // Check if current page is a CAPTCHA before doing anything
       const currentUrl = this.page.url();
-      const title = await this.page.title();
-      const pageText = await this.page.evaluate(() => document.body.innerText.toLowerCase());
       
-      const captchaIndicators = [
-        'sorry/index',
-        'recaptcha',
-        'captcha',
-        'unusual traffic',
-        'automated requests',
-        'verify you\'re human',
-        'not a robot',
-        'select all images',
-        'click verify once there are none left'
-      ];
+      // Fast check: Look for specific CAPTCHA elements in DOM first
+      const hasCaptchaElements = await this.page.evaluate(() => {
+        const captchaSelectors = [
+          '.g-recaptcha',
+          '#recaptcha',
+          '[data-sitekey]',
+          'iframe[src*="recaptcha"]',
+          'iframe[title*="reCAPTCHA"]',
+          '.cf-challenge-form',
+          '.challenge-form',
+          'div[class*="captcha"]',
+          'div[id*="captcha"]',
+          '.h-captcha',
+          'iframe[src*="hcaptcha"]'
+        ];
+        
+        return captchaSelectors.some(selector => document.querySelector(selector) !== null);
+      });
       
-      const isCaptcha = captchaIndicators.some(indicator => 
-        currentUrl.toLowerCase().includes(indicator) ||
-        title.toLowerCase().includes(indicator) ||
-        pageText.includes(indicator)
-      );
+      if (hasCaptchaElements) {
+        var isCaptcha = true;
+      } else {
+        // Fallback: URL and text-based detection
+        const captchaIndicators = [
+          'sorry/index',
+          'recaptcha',
+          'captcha',
+          'unusual traffic',
+          'automated requests',
+          'verify you\'re human',
+          'not a robot',
+          'select all images',
+          'click verify once there are none left'
+        ];
+        
+        // Fast check: URL first (most reliable for Google, Cloudflare, etc.)
+        const urlLower = currentUrl.toLowerCase();
+        const isUrlCaptcha = captchaIndicators.some(indicator => urlLower.includes(indicator));
+        
+        if (isUrlCaptcha) {
+          var isCaptcha = true;
+        } else {
+          // Medium speed check: title
+          const title = await this.page.title();
+          const titleLower = title.toLowerCase();
+          const isTitleCaptcha = captchaIndicators.some(indicator => titleLower.includes(indicator));
+          
+          if (isTitleCaptcha) {
+            var isCaptcha = true;
+          } else {
+            // Slower check: limited page content (only if URL and title don't match)
+            const pageText = await this.page.evaluate(() => {
+              // Only check key elements instead of all text for speed
+              const selectors = ['h1', 'h2', '.main-content', '#content', 'form', '.error-message', '.challenge'];
+              const texts = selectors.map(sel => {
+                const elements = document.querySelectorAll(sel);
+                return Array.from(elements).map(el => el.textContent || '').join(' ');
+              }).join(' ').toLowerCase();
+              return texts;
+            });
+            
+            var isCaptcha = captchaIndicators.some(indicator => pageText.includes(indicator));
+          }
+        }
+      }
       
       if (isCaptcha) {
         // console.error('[InjectAgentScript] CAPTCHA page detected');
@@ -1070,7 +2241,7 @@ export class SupapupServer {
         const basicManifest = {
           elements: [],
           url: currentUrl,
-          title: title,
+          title: await this.page.title(),
           isCaptcha: true
         };
         return basicManifest;
@@ -1160,21 +2331,7 @@ export class SupapupServer {
         
         // Check if it's a CAPTCHA page
         if ((newManifest as any).isCaptcha) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `⚠️ CAPTCHA/verification page detected\n\n` +
-                      `📍 Current URL: ${currentUrl}\n\n` +
-                      `🤖 As an automation tool, I cannot solve CAPTCHAs.\n\n` +
-                      `👤 Please:\n` +
-                      `1. Go to the browser window\n` +
-                      `2. Complete the CAPTCHA manually\n` +
-                      `3. Call wait_for_changes tool again to continue\n\n` +
-                      `The browser will remain open for your interaction.`,
-              },
-            ],
-          };
+          return getCaptchaMessage(currentUrl, { detectionType: 'general' });
         }
         
         const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
@@ -1207,21 +2364,7 @@ export class SupapupServer {
         
         // Check if it's a CAPTCHA page
         if ((newManifest as any).isCaptcha) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `⚠️ CAPTCHA/verification page detected\n\n` +
-                      `📍 Current URL: ${this.page?.url()}\n\n` +
-                      `🤖 As an automation tool, I cannot solve CAPTCHAs.\n\n` +
-                      `👤 Please:\n` +
-                      `1. Go to the browser window\n` +
-                      `2. Complete the CAPTCHA manually\n` +
-                      `3. Call wait_for_changes tool again to continue\n\n` +
-                      `The browser will remain open for your interaction.`,
-              },
-            ],
-          };
+          return getCaptchaMessage(this.page?.url() || '', { detectionType: 'general' });
         }
         
         const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
@@ -1352,9 +2495,14 @@ export class SupapupServer {
 
     if (args.fullPage) {
       // For full page screenshots, check if we need to split
-      const viewport = await this.page.viewport();
+      let viewport = await this.page.viewport();
       if (!viewport) {
-        throw new Error('Could not get viewport dimensions');
+        // Set a default viewport if none exists
+        await this.page.setViewport({ width: 1920, height: 1080 });
+        viewport = await this.page.viewport();
+        if (!viewport) {
+          throw new Error('Could not get or set viewport dimensions');
+        }
       }
 
       // Get the full page dimensions
@@ -1417,7 +2565,27 @@ export class SupapupServer {
           type: 'jpeg',
         });
 
+        // Validate first chunk screenshot buffer
+        if (!firstChunk || firstChunk.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `❌ First chunk screenshot failed: Empty or invalid screenshot buffer. Page may not be fully loaded.`,
+            }],
+          };
+        }
+
         const firstChunkBase64 = (firstChunk as Buffer).toString('base64');
+        
+        // Additional validation: ensure base64 string is not empty
+        if (!firstChunkBase64 || firstChunkBase64.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `❌ First chunk screenshot failed: Empty base64 conversion. Screenshot buffer may be corrupted.`,
+            }],
+          };
+        }
         
         // Open screenshot in new tab if requested
         if (args.openInNewTab !== false) {
@@ -1485,7 +2653,27 @@ export class SupapupServer {
         type: 'jpeg',
       });
 
+      // Validate element screenshot buffer
+      if (!screenshot || screenshot.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: `❌ Element screenshot failed: Empty or invalid screenshot buffer for selector ${args.selector}`,
+          }],
+        };
+      }
+
       const screenshotBase64 = (screenshot as Buffer).toString('base64');
+      
+      // Additional validation: ensure base64 string is not empty
+      if (!screenshotBase64 || screenshotBase64.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: `❌ Element screenshot failed: Empty base64 conversion for selector ${args.selector}`,
+          }],
+        };
+      }
       
       // Open screenshot in new tab if requested (not for system screenshots)
       if (args.openInNewTab !== false) {
@@ -1522,7 +2710,27 @@ export class SupapupServer {
       }) as Buffer;
     }
 
+    // Validate screenshot buffer before converting to base64
+    if (!screenshot || screenshot.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ Screenshot failed: Empty or invalid screenshot buffer. Page may not be fully loaded or accessible.`,
+        }],
+      };
+    }
+
     const screenshotBase64 = (screenshot as Buffer).toString('base64');
+    
+    // Additional validation: ensure base64 string is not empty
+    if (!screenshotBase64 || screenshotBase64.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ Screenshot failed: Empty base64 conversion. Screenshot buffer may be corrupted.`,
+        }],
+      };
+    }
     
     // Open screenshot in new tab if requested (not for system screenshots)
     if (args.openInNewTab !== false) {
@@ -1568,9 +2776,14 @@ export class SupapupServer {
       throw new Error('No page loaded. Navigate to a page first.');
     }
 
-    const viewport = await this.page.viewport();
+    let viewport = await this.page.viewport();
     if (!viewport) {
-      throw new Error('Could not get viewport dimensions');
+      // Set a default viewport if none exists
+      await this.page.setViewport({ width: 1920, height: 1080 });
+      viewport = await this.page.viewport();
+      if (!viewport) {
+        throw new Error('Could not get or set viewport dimensions');
+      }
     }
 
     // Get the full page dimensions
@@ -1682,7 +2895,27 @@ export class SupapupServer {
       type: 'jpeg',
     });
 
+    // Validate chunk screenshot buffer
+    if (!screenshot || screenshot.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ Chunk ${chunk} screenshot failed: Empty or invalid screenshot buffer. Page may not be fully loaded.`,
+        }],
+      };
+    }
+
     const screenshotBase64 = (screenshot as Buffer).toString('base64');
+    
+    // Additional validation: ensure base64 string is not empty
+    if (!screenshotBase64 || screenshotBase64.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ Chunk ${chunk} screenshot failed: Empty base64 conversion. Screenshot buffer may be corrupted.`,
+        }],
+      };
+    }
     
     // Open screenshot in new tab
     try {
@@ -1781,8 +3014,136 @@ export class SupapupServer {
     }
   }
 
+  async listTabs() {
+    if (!this.browser) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: '❌ Browser not initialized. Please navigate to a page first.',
+          },
+        ],
+      };
+    }
+
+    try {
+      const pages = await this.browser.pages();
+      let tabList = '📑 Open Browser Tabs:\n\n';
+      
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const title = await page.title();
+        const url = page.url();
+        const isCurrentTab = page === this.page ? ' 👈 CURRENT' : '';
+        
+        tabList += `[${i}] ${title || 'Untitled'}\n`;
+        tabList += `    📍 ${url}\n`;
+        tabList += `    ${isCurrentTab}\n\n`;
+      }
+      
+      tabList += `💡 Use switch_tab({index: N}) to switch to tab N`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: tabList,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to list tabs: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+
+  async switchTab(args: { index: number }) {
+    if (!this.browser) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: '❌ Browser not initialized. Please navigate to a page first.',
+          },
+        ],
+      };
+    }
+
+    try {
+      const pages = await this.browser.pages();
+      
+      if (args.index < 0 || args.index >= pages.length) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `❌ Invalid tab index ${args.index}. Available tabs: 0-${pages.length - 1}`,
+            },
+          ],
+        };
+      }
+
+      const targetPage = pages[args.index];
+      const title = await targetPage.title();
+      const url = targetPage.url();
+      
+      // Switch to the target tab
+      await targetPage.bringToFront();
+      this.page = targetPage;
+      
+      // Clean up existing tools before creating new ones
+      await this.cleanupTools();
+      
+      // Re-initialize tools for the new page
+      this.devToolsElements = new DevToolsElements();
+      this.networkTools = new NetworkTools(targetPage);
+      this.pageAnalysis = new PageAnalysis(targetPage);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ Switched to tab ${args.index}\n` +
+                  `📍 Title: ${title || 'Untitled'}\n` +
+                  `🌐 URL: ${url}\n\n` +
+                  `💡 All Supapup tools are now connected to this tab`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to switch tab: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Cleanup method to remove event listeners from existing tools
+  private async cleanupTools() {
+    if (this.networkTools && typeof this.networkTools.cleanup === 'function') {
+      this.networkTools.cleanup();
+    }
+    if (this.debuggingTools && typeof this.debuggingTools.cleanup === 'function') {
+      await this.debuggingTools.cleanup();
+    }
+    // Add more cleanup for other tools if needed
+  }
+
   async closeBrowser() {
     if (this.browser) {
+      // Clean up tools before closing
+      await this.cleanupTools();
+      
       await this.browser.close();
       this.browser = null;
       this.page = null;
@@ -1814,9 +3175,54 @@ export class SupapupServer {
     // Get the complete agent page script with helper functions
     const agentPageScript = AgentPageScript.generate();
     
-    // Inject complete interaction script
+    // Inject complete interaction script after page loads
     await this.page!.addScriptTag({
       content: `
+        // Dialog overrides for MCP compatibility
+        (function() {
+          const originalAlert = window.alert;
+          const originalConfirm = window.confirm;
+          const originalPrompt = window.prompt;
+          
+          window.alert = function(message) {
+            console.log('[MCP] Alert intercepted:', message);
+            const alertDiv = document.createElement('div');
+            alertDiv.id = 'mcp-alert-' + Date.now();
+            alertDiv.setAttribute('data-mcp-id', 'alert-dialog');
+            alertDiv.setAttribute('data-mcp-type', 'alert');
+            alertDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#ff4444;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);';
+            alertDiv.innerHTML = '<div style="margin-bottom:10px;">' + message + '</div><button data-mcp-id="alert-ok" onclick="this.parentElement.remove();" style="background:white;color:#ff4444;border:none;padding:5px 10px;border-radius:3px;">OK</button>';
+            document.body.appendChild(alertDiv);
+            return undefined;
+          };
+          
+          window.confirm = function(message) {
+            console.log('[MCP] Confirm intercepted:', message);
+            const confirmDiv = document.createElement('div');
+            confirmDiv.id = 'mcp-confirm-' + Date.now();
+            confirmDiv.setAttribute('data-mcp-id', 'confirm-dialog');
+            confirmDiv.setAttribute('data-mcp-type', 'confirm');
+            confirmDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#4444ff;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);';
+            confirmDiv.innerHTML = '<div style="margin-bottom:10px;">' + message + '</div><button data-mcp-id="confirm-ok" onclick="window.__MCP_CONFIRM_RESULT__ = true; this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="confirm-cancel" onclick="window.__MCP_CONFIRM_RESULT__ = false; this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
+            document.body.appendChild(confirmDiv);
+            return false; // Default to false for non-blocking
+          };
+          
+          window.prompt = function(message, defaultValue) {
+            console.log('[MCP] Prompt intercepted:', message);
+            const promptDiv = document.createElement('div');
+            promptDiv.id = 'mcp-prompt-' + Date.now();
+            promptDiv.setAttribute('data-mcp-id', 'prompt-dialog');
+            promptDiv.setAttribute('data-mcp-type', 'prompt');
+            promptDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#44ff44;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);';
+            promptDiv.innerHTML = '<div style="margin-bottom:10px;">' + message + '</div><input type="text" data-mcp-id="prompt-input" value="' + (defaultValue || '') + '" style="width:200px;padding:5px;margin-bottom:10px;border:none;border-radius:3px;"><br><button data-mcp-id="prompt-ok" onclick="window.__MCP_PROMPT_RESULT__ = this.parentElement.querySelector(\'[data-mcp-id=\"prompt-input\"]\').value; this.parentElement.remove();" style="background:white;color:#44ff44;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="prompt-cancel" onclick="window.__MCP_PROMPT_RESULT__ = null; this.parentElement.remove();" style="background:white;color:#44ff44;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
+            document.body.appendChild(promptDiv);
+            return null; // Default to null for non-blocking
+          };
+          
+          console.log('[MCP] Dialog overrides installed');
+        })();
+        
         ${attributeScript}
         ${agentPageScript}
         
@@ -1824,6 +3230,207 @@ export class SupapupServer {
         window.__AGENT_PAGE__.manifest = ${JSON.stringify(manifest, (key, value) => key === 'element' ? undefined : value)};
       `
     });
+  }
+
+  // Storage management methods
+  private async getStorage(args: { type?: string }) {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      const type = args.type || 'all';
+      let data: any = {};
+
+      if (type === 'all' || type === 'localStorage') {
+        data.localStorage = await this.storageTools.getLocalStorage();
+      }
+      if (type === 'all' || type === 'sessionStorage') {
+        data.sessionStorage = await this.storageTools.getSessionStorage();
+      }
+      if (type === 'all' || type === 'cookies') {
+        data.cookies = await this.storageTools.getCookies();
+      }
+
+      const formatted = this.storageTools.formatStorageData(data);
+      return {
+        content: [{ type: 'text', text: formatted }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error getting storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async setStorage(args: { type: string; key: string; value: string }) {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      if (args.type === 'localStorage') {
+        await this.storageTools.setLocalStorage(args.key, args.value);
+      } else if (args.type === 'sessionStorage') {
+        await this.storageTools.setSessionStorage(args.key, args.value);
+      } else {
+        throw new Error(`Invalid storage type: ${args.type}`);
+      }
+
+      return {
+        content: [{ type: 'text', text: `✅ Set ${args.type}.${args.key} = "${args.value}"` }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error setting storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async removeStorage(args: { type: string; key: string }) {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      if (args.type === 'localStorage') {
+        await this.storageTools.removeLocalStorage(args.key);
+      } else if (args.type === 'sessionStorage') {
+        await this.storageTools.removeSessionStorage(args.key);
+      } else {
+        throw new Error(`Invalid storage type: ${args.type}`);
+      }
+
+      return {
+        content: [{ type: 'text', text: `✅ Removed ${args.type}.${args.key}` }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error removing storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async clearStorage(args: { type?: string }) {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      const type = args.type || 'all';
+
+      if (type === 'all') {
+        await this.storageTools.clearAllStorage();
+        return {
+          content: [{ type: 'text', text: '✅ Cleared all storage (localStorage, sessionStorage, cookies)' }],
+        };
+      } else if (type === 'localStorage') {
+        await this.storageTools.clearLocalStorage();
+        return {
+          content: [{ type: 'text', text: '✅ Cleared localStorage' }],
+        };
+      } else if (type === 'sessionStorage') {
+        await this.storageTools.clearSessionStorage();
+        return {
+          content: [{ type: 'text', text: '✅ Cleared sessionStorage' }],
+        };
+      } else if (type === 'cookies') {
+        await this.storageTools.clearCookies();
+        return {
+          content: [{ type: 'text', text: '✅ Cleared cookies' }],
+        };
+      } else {
+        throw new Error(`Invalid storage type: ${type}`);
+      }
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error clearing storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async exportStorageState() {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      const state = await this.storageTools.exportStorageState();
+      return {
+        content: [
+          { 
+            type: 'text', 
+            text: '✅ Storage state exported\n\n' + 
+                  '💾 Save this state object to persist the session:\n\n' +
+                  '```json\n' + JSON.stringify(state, null, 2) + '\n```' 
+          }
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error exporting storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async importStorageState(args: { state: any }) {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      await this.storageTools.importStorageState(args.state);
+      return {
+        content: [{ type: 'text', text: '✅ Storage state imported successfully' }],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error importing storage: ${error.message}` }],
+      };
+    }
+  }
+
+  private async getStorageInfo() {
+    if (!this.storageTools) {
+      return {
+        content: [{ type: 'text', text: '❌ Storage tools not initialized. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      const info = await this.storageTools.getStorageInfo();
+      const usageMB = (info.usage / 1024 / 1024).toFixed(2);
+      const quotaMB = (info.quota / 1024 / 1024).toFixed(2);
+      const percentUsed = ((info.usage / info.quota) * 100).toFixed(2);
+
+      return {
+        content: [
+          { 
+            type: 'text', 
+            text: `📊 Storage Information\n` +
+                  `====================\n\n` +
+                  `📈 Usage: ${usageMB} MB / ${quotaMB} MB (${percentUsed}%)\n` +
+                  `💾 Available: ${((info.quota - info.usage) / 1024 / 1024).toFixed(2)} MB` 
+          }
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [{ type: 'text', text: `❌ Error getting storage info: ${error.message}` }],
+      };
+    }
   }
 
   async run() {

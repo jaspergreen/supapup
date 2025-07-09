@@ -18,6 +18,9 @@ export class NetworkTools {
   private page: Page;
   private networkLogs: NetworkLog[] = [];
   private consoleLogs: any[] = [];
+  private requestHandler: (request: any) => void = () => {};
+  private responseHandler: (response: any) => void = () => {};
+  private consoleHandler: (msg: any) => void = () => {};
 
   constructor(page: Page) {
     this.page = page;
@@ -25,8 +28,8 @@ export class NetworkTools {
   }
 
   private setupNetworkMonitoring() {
-    // Monitor network requests
-    this.page.on('request', (request) => {
+    // Store handlers for cleanup
+    this.requestHandler = (request) => {
       const log: NetworkLog = {
         timestamp: new Date(),
         method: request.method(),
@@ -36,32 +39,68 @@ export class NetworkTools {
         isAPI: this.isAPIRequest(request.url())
       };
       this.networkLogs.push(log);
-    });
+    };
 
-    this.page.on('response', (response) => {
+    this.responseHandler = (response) => {
       const log = this.networkLogs.find(l => l.url === response.url() && !l.status);
       if (log) {
         log.status = response.status();
         log.responseHeaders = response.headers();
         log.duration = Date.now() - log.timestamp.getTime();
       }
-    });
+    };
 
-    // Monitor console logs
-    this.page.on('console', (msg) => {
+    this.consoleHandler = (msg) => {
       this.consoleLogs.push({
         timestamp: new Date(),
         type: msg.type(),
         text: msg.text(),
         args: msg.args()
       });
-    });
+    };
+
+    // Monitor network requests
+    this.page.on('request', this.requestHandler);
+    this.page.on('response', this.responseHandler);
+    this.page.on('console', this.consoleHandler);
+  }
+
+  // Cleanup method to remove event listeners
+  public cleanup() {
+    if (this.page && this.requestHandler) {
+      this.page.off('request', this.requestHandler);
+    }
+    if (this.page && this.responseHandler) {
+      this.page.off('response', this.responseHandler);
+    }
+    if (this.page && this.consoleHandler) {
+      this.page.off('console', this.consoleHandler);
+    }
   }
 
   private isAPIRequest(url: string): boolean {
-    return /\/(api|graphql|rest)\//.test(url) || 
-           url.includes('.json') || 
-           /\.(php|aspx|jsp)/.test(url);
+    // More inclusive API detection
+    // Exclude common static resources
+    const staticExtensions = /\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i;
+    const isStatic = staticExtensions.test(url);
+    
+    // Include common API patterns and AJAX requests
+    const apiPatterns = /\/(api|graphql|rest|ajax|data|service|endpoint|v\d+)\//i;
+    const hasApiPattern = apiPatterns.test(url);
+    
+    // Include requests that might be APIs based on response type
+    const possibleApiExtensions = /\.(json|xml)$/i;
+    const hasApiExtension = possibleApiExtensions.test(url);
+    
+    // Include any XHR/fetch that's not static
+    const isXhrFetch = !isStatic && (
+      url.includes('?') || // Has query params
+      /\.(php|aspx|jsp|py|rb|do)/.test(url) || // Dynamic extensions
+      hasApiPattern ||
+      hasApiExtension
+    );
+    
+    return isXhrFetch;
   }
 
   async getConsoleLogs(args: any) {
