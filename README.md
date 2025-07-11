@@ -96,10 +96,51 @@ Supapup is an intelligent web automation tool that bridges the gap between AI ag
 
 ## 📦 Installation
 
-### As an MCP Server
+### Install with npm
 
 ```bash
 npm install -g supapup
+```
+
+### Using with Claude CLI
+
+1. First, ensure you have Claude CLI installed:
+```bash
+npm install -g @anthropic/claude-cli
+```
+
+2. Configure Supapup as an MCP server:
+```bash
+claude mcp add supapup "npx supapup"
+```
+
+3. Start using Supapup in Claude:
+```bash
+claude "Navigate to example.com and find all buttons"
+```
+
+For more Claude CLI MCP configuration:
+```bash
+claude mcp help
+```
+
+### Using with Gemini CLI
+
+1. Install Gemini CLI:
+```bash
+npm install -g @google/gemini-cli
+```
+
+2. Configure Supapup in your Gemini config:
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "npx",
+      "args": ["supapup"]
+    }
+  }
+}
 ```
 
 ### As a Library
@@ -119,28 +160,24 @@ npm run build
 
 ## 🚀 Quick Start
 
-### Using with Claude Desktop
+### With Claude CLI
 
-Add to your `claude_desktop_config.json`:
+```bash
+# Add Supapup to Claude CLI
+claude mcp add supapup "npx supapup"
 
-```json
-{
-  "mcpServers": {
-    "supapup": {
-      "command": "npx",
-      "args": ["supapup"]
-    }
-  }
-}
+# Use it in a conversation
+claude "Navigate to https://example.com and click the login button"
+
+# Or start an interactive session
+claude --interactive
 ```
 
-### Basic Usage Example
+### With Gemini CLI
 
-```javascript
-import { SupapupServer } from 'supapup';
-
-const server = new SupapupServer();
-await server.run();
+```bash
+# Configure in gemini-config.json then:
+gemini "Use Supapup to navigate to example.com and find all forms"
 ```
 
 ## 🛠️ MCP Tools
