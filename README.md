@@ -13,9 +13,13 @@
   <a href="#contributing">Contributing</a>
 </p>
 
-<p align="center">
-  <a href="https://youtu.be/Dz3ybvq5YNc">📺 Watch Demo Video</a>
-</p>
+<div align="center">
+
+## 🎬 [Watch Demo Video](https://youtu.be/Dz3ybvq5YNc)
+
+See Supapup in action - automated web testing with AI agents
+
+</div>
 
 ---
 
@@ -63,6 +67,12 @@ Example: execute_action({actionId: "form-login-email", params: {value: "user@exa
 - 💰 **90% fewer tokens** - Text-based output instead of images
 - 🎯 **Zero complexity** - Semantic IDs ready to use, no CSS selectors needed
 - 🔄 **Dynamic handling** - Automatically remaps after page changes
+
+<div align="center">
+
+### 🎥 [See it in Action - Watch Demo](https://youtu.be/Dz3ybvq5YNc)
+
+</div>
 
 ---
 
