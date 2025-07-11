@@ -13,6 +13,10 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/Dz3ybvq5YNc">📺 Watch Demo Video</a>
+</p>
+
 ---
 
 ## 🚀 See the Difference
@@ -71,6 +75,7 @@ Supapup is an intelligent web automation tool that bridges the gap between AI ag
 - **Structured Representation**: Web pages are presented as organized, actionable interfaces
 - **Automatic Element Detection**: Intelligently identifies interactive elements on any page
 - **Visual Element Mapping**: Number-based element identification for easy interaction
+- **Unique ID Generation**: Handles duplicate elements intelligently - multiple "Add to Cart" buttons get unique IDs with product context
 
 ### 🔍 Advanced Debugging
 - **JavaScript Breakpoints**: Set conditional breakpoints and step through code
@@ -197,6 +202,22 @@ await execute_action({
 });
 ```
 
+### Handling Duplicate Elements
+
+```javascript
+// Navigate to e-commerce page with multiple "Add to Cart" buttons
+await navigate({ url: 'https://shop.example.com/products' });
+
+// Each button gets a unique ID with product context
+// AGENT PAGE VIEW shows:
+// • Add to Cart - Laptop Pro → laptop_pro_button_0
+// • Add to Cart - Wireless Mouse → wireless_mouse_button_1
+// • Add to Cart - USB Cable → usb_cable_button_2
+
+// Click specific product's button
+await execute_action({ actionId: 'wireless_mouse_button_1' });
+```
+
 ### Visual Element Interaction
 
 ```javascript
@@ -249,10 +270,20 @@ Supapup consists of several specialized modules:
 
 - **Agent Page Generator**: Creates structured representations of web pages
 - **Element Detector**: Automatically identifies interactive elements
+- **ID Generator**: Creates unique, semantic IDs incorporating context from parent forms, headings, and element properties
 - **Debugging Tools**: Full Chrome DevTools Protocol integration
 - **Network Tools**: Comprehensive request/response monitoring
 - **Page Analysis**: Performance metrics and accessibility analysis
 - **DevTools Elements**: Visual element mapping and manipulation
+
+### ID Generation Strategy
+
+Supapup ensures every element gets a unique, meaningful ID by:
+1. Extracting context from parent containers (forms, sections, headings)
+2. Including semantic meaning (label text, placeholder, button text)
+3. Adding element type suffixes (button, link, input, checkbox)
+4. Appending unique indices to guarantee no duplicates
+5. Handling dynamic content with stable ID regeneration
 
 ## 🤝 Contributing
 
