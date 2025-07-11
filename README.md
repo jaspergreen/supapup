@@ -221,84 +221,52 @@ gemini "Use Supapup to navigate to example.com and find all forms"
 
 ## 📚 Examples
 
-### Basic Web Automation
+### Testing a Website
 
-```javascript
-// Navigate to a page
-await navigate({ url: 'https://example.com' });
+```bash
+claude "Test the login flow on https://myapp.com - try logging in with test credentials and tell me if it works"
 
-// Execute an action using semantic ID
-await execute_action({ 
-  actionId: 'search-input', 
-  params: { value: 'AI automation' } 
-});
-
-// Click submit button
-await execute_action({ 
-  actionId: 'search-submit' 
-});
+claude "Navigate to https://shop.example.com and add 3 different products to cart, then check if the cart total is calculated correctly"
 ```
 
-### Handling Duplicate Elements
+### Debugging API Errors
 
-```javascript
-// Navigate to e-commerce page with multiple "Add to Cart" buttons
-await navigate({ url: 'https://shop.example.com/products' });
+```bash
+claude "Go to https://myapp.com/dashboard and check the network logs for any failed API calls. Tell me what's causing the 404 errors"
 
-// Each button gets a unique ID with product context
-// AGENT PAGE VIEW shows:
-// • Add to Cart - Laptop Pro → laptop_pro_button_0
-// • Add to Cart - Wireless Mouse → wireless_mouse_button_1
-// • Add to Cart - USB Cable → usb_cable_button_2
-
-// Click specific product's button
-await execute_action({ actionId: 'wireless_mouse_button_1' });
+claude "Monitor the API requests on https://example.com/form when I submit the form. Check if the auth token is being sent correctly"
 ```
 
-### Visual Element Interaction
+### Visual Debugging
 
-```javascript
-// Create visual map
-await devtools_visual_element_map();
+```bash
+claude "Why does the submit button on https://mysite.com/contact look broken? Take a screenshot and inspect its CSS"
 
-// Use JavaScript helpers to interact
-await evaluate_script({
-  script: `
-    window.__AGENT_PAGE__.fillElement(5, "user@example.com");
-    window.__AGENT_PAGE__.clickElement(10);
-  `
-});
+claude "The layout on https://myapp.com is messed up on mobile. Can you check how it looks at 375px width and tell me what's wrong?"
 ```
 
-### Network Monitoring
+### Finding Elements
 
-```javascript
-// Get API logs
-const logs = await get_api_logs({ 
-  urlPattern: 'api.example.com' 
-});
+```bash
+claude "I can't find the logout button on https://app.example.com. Can you help me locate it?"
 
-// Replay request with modifications
-await replay_api_request({
-  url: 'https://api.example.com/data',
-  headers: { 'Authorization': 'Bearer new-token' }
-});
+claude "Show me all the forms on https://example.com and tell me which fields are required"
 ```
 
-### Debugging
+### Performance Testing
 
-```javascript
-// Set breakpoint
-await set_breakpoint({ 
-  lineNumber: 42, 
-  url: 'https://example.com/script.js' 
-});
+```bash
+claude "Check the performance metrics for https://mysite.com and tell me what's making it load slowly"
 
-// Trigger and debug
-await debug_function({ lineNumber: 42 });
+claude "Test https://heavysite.com and identify which resources are taking the longest to load"
+```
 
-// Inspect variables
-const vars = await debug_get_variables();
+### Automated Testing
+
+```bash
+claude "Run through the checkout process on https://shop.com: add item to cart, go to checkout, fill in the form with test data, but stop before placing the order"
+
+claude "Test all the navigation links on https://mysite.com and tell me if any are broken"
 ```
 
 ## 🏗️ Architecture
