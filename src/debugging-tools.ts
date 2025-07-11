@@ -5,6 +5,7 @@ export class DebuggingTools {
   private pausedParams: any = null;
   private client: CDPSession | null = null;
   private pausedHandler: (params: any) => void = () => {};
+  private scriptParsedHandler: (params: any) => void = () => {};
 
   constructor(page: Page) {
     this.page = page;
@@ -40,6 +41,9 @@ export class DebuggingTools {
     if (this.client) {
       if (this.pausedHandler) {
         this.client.off('Debugger.paused', this.pausedHandler);
+      }
+      if (this.scriptParsedHandler) {
+        this.client.off('Debugger.scriptParsed', this.scriptParsedHandler);
       }
       try {
         await this.client.detach();
@@ -96,9 +100,10 @@ export class DebuggingTools {
         
         // Get all parsed scripts
         const scripts: any[] = [];
-        this.client.on('Debugger.scriptParsed', (params) => {
+        this.scriptParsedHandler = (params) => {
           scripts.push(params);
-        });
+        };
+        this.client.on('Debugger.scriptParsed', this.scriptParsedHandler);
         
         // Force a page evaluation to ensure scripts are parsed
         await this.page.evaluate(() => { /* Force script parsing */ });
@@ -258,14 +263,25 @@ export class DebuggingTools {
       const { functionName, location } = callFrame;
       
       const variables: any = {};
-      for (const scope of callFrame.scopeChain) {
+      
+      // Only get the first scope (local scope) to avoid massive responses
+      const localScope = callFrame.scopeChain.find((scope: any) => scope.type === 'local') || callFrame.scopeChain[0];
+      
+      if (localScope) {
         const { result } = await this.client.send('Runtime.getProperties', {
-          objectId: scope.object.objectId
+          objectId: localScope.object.objectId,
+          ownProperties: true,
+          accessorPropertiesOnly: false,
+          generatePreview: false
         });
         
+        // Only get simple values (not functions or complex objects)
         result.forEach((prop: any) => {
-          if (prop.value) {
-            variables[prop.name] = prop.value.value || prop.value.description;
+          if (prop.value && prop.value.type !== 'function' && !prop.name.startsWith('__')) {
+            const value = prop.value.value !== undefined ? prop.value.value : 
+                         prop.value.type === 'object' ? `[${prop.value.className || 'Object'}]` :
+                         prop.value.description;
+            variables[prop.name] = value;
           }
         });
       }
@@ -276,7 +292,8 @@ export class DebuggingTools {
             type: 'text',
             text: `🐛 Debug Context:\n\n` +
                   `📍 Location: ${callFrame.url}:${location.lineNumber + 1}\n` +
-                  `🔍 Function: ${functionName}\n\n` +
+                  `🔍 Function: ${functionName || 'anonymous'}\n` +
+                  `📍 Scope: ${localScope?.type || 'unknown'}\n\n` +
                   `📊 Local Variables:\n${JSON.stringify(variables, null, 2)}\n\n`
           },
         ],

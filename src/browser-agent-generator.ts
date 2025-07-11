@@ -132,6 +132,16 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
     
     // For buttons and links, use their text content
     if (tagName === 'a' || tagName === 'button') {
+      // For buttons, try to include product context
+      if (tagName === 'button') {
+        const container = element.closest('div');
+        if (container) {
+          const heading = container.querySelector('h1, h2, h3, h4, h5, h6');
+          if (heading && heading.textContent) {
+            return `${text} - ${heading.textContent.trim()}`;
+          }
+        }
+      }
       return text.substring(0, 50);
     }
     
@@ -162,38 +172,145 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
 
   function generateElementId(element: Element, index: number): string {
     const type = getElementType(element);
-    const context = getElementContext(element);
-    const name = element.getAttribute('name');
+    const tagName = element.tagName.toLowerCase();
+    
+    // Collect ALL context information
+    const contextParts = [];
+    
+    // 1. Element's own attributes
     const id = element.getAttribute('id');
+    const name = element.getAttribute('name');
+    const ariaLabel = element.getAttribute('aria-label');
+    const title = element.getAttribute('title');
+    const placeholder = element.getAttribute('placeholder');
+    const value = element.getAttribute('value');
+    const href = element.getAttribute('href');
+    const className = element.className;
     
-    // Build ID parts
-    const parts = [];
+    // 2. Element's text content
+    const ownText = element.textContent?.trim() || '';
     
-    // Add form context if in a form
+    // 3. Form context
     const form = element.closest('form');
     if (form) {
-      const formName = form.getAttribute('name') || form.getAttribute('id') || 'form';
-      parts.push(formName.toLowerCase().replace(/[^a-z0-9]/g, '-'));
+      const formId = form.getAttribute('id') || form.getAttribute('name') || 'form';
+      contextParts.push(`FORM[${formId}]`);
     }
     
-    // Add semantic name
-    if (name) {
-      parts.push(name.toLowerCase().replace(/[^a-z0-9]/g, '-'));
-    } else if (id) {
-      parts.push(id.toLowerCase().replace(/[^a-z0-9]/g, '-'));
-    } else if (context) {
-      parts.push(context.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20));
+    // 4. Parent container context (especially for e-commerce)
+    const container = element.closest('div, section, article, li');
+    if (container) {
+      // Get ALL text from container for maximum context
+      const heading = container.querySelector('h1, h2, h3, h4, h5, h6');
+      const price = container.querySelector('[class*="price"], [data-price]');
+      const description = container.querySelector('p, .description, [class*="desc"]');
+      
+      if (heading?.textContent) {
+        contextParts.push(`PRODUCT[${heading.textContent.trim()}]`);
+      }
+      
+      if (price?.textContent) {
+        const priceMatch = price.textContent.match(/\$?[\d,]+\.?\d*/);
+        if (priceMatch) {
+          contextParts.push(`PRICE[${priceMatch[0]}]`);
+        }
+      }
+      
+      if (description?.textContent && description !== element) {
+        contextParts.push(`DESC[${description.textContent.trim().substring(0, 50)}]`);
+      }
     }
     
-    // Add type
-    parts.push(type);
-    
-    // If still no meaningful parts, use index
-    if (parts.length === 0 || (parts.length === 1 && parts[0] === type)) {
-      parts.push(`element-${index}`);
+    // 5. Associated label
+    const label = getAssociatedLabel(element);
+    if (label) {
+      contextParts.push(`LABEL[${label}]`);
     }
     
-    return parts.join('-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    // 6. Build comprehensive ID
+    const idParts = [];
+    
+    // Add all available attributes
+    if (id) idParts.push(`ID{${id}}`);
+    if (name) idParts.push(`NAME{${name}}`);
+    if (ariaLabel) idParts.push(`ARIA{${ariaLabel}}`);
+    if (title) idParts.push(`TITLE{${title}}`);
+    if (placeholder) idParts.push(`PLACEHOLDER{${placeholder}}`);
+    if (href) idParts.push(`HREF{${href.replace(/[\/\?#]/g, '_')}}`);
+    if (className) idParts.push(`CLASS{${className.replace(/\s+/g, '_')}}`);
+    
+    // Add context information
+    contextParts.forEach(part => idParts.push(part));
+    
+    // Add element type and text
+    if (ownText && tagName !== 'form') {
+      idParts.push(`TEXT{${ownText.substring(0, 50)}}`);
+    }
+    idParts.push(`TYPE{${type}}`);
+    
+    // Add position information for disambiguation
+    const parent = element.parentElement;
+    if (parent) {
+      const siblings = Array.from(parent.children);
+      const position = siblings.indexOf(element);
+      idParts.push(`POS{${position}}`);
+    }
+    
+    // Add unique index
+    idParts.push(`IDX{${index}}`);
+    
+    // Create a balanced ID that's informative but not overwhelming
+    const essentialParts = [];
+    
+    // 1. Use HTML ID as primary identifier if available (most reliable)
+    if (id) {
+      essentialParts.push(id);
+    }
+    // 2. Or use name attribute
+    else if (name) {
+      essentialParts.push(name);
+    }
+    // 3. For product buttons, include product name from context
+    else if (contextParts.some(p => p.startsWith('PRODUCT['))) {
+      const productPart = contextParts.find(p => p.startsWith('PRODUCT['));
+      const productName = productPart!.match(/PRODUCT\[(.*?)\]/)?.[1] || '';
+      if (productName) {
+        essentialParts.push(productName.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+      }
+      
+      // Also add price for extra context
+      const pricePart = contextParts.find(p => p.startsWith('PRICE['));
+      if (pricePart) {
+        const price = pricePart.match(/PRICE\[(.*?)\]/)?.[1] || '';
+        essentialParts.push(`price_${price.replace(/[^0-9]/g, '')}`);
+      }
+    }
+    // 4. For form fields, use label text
+    else if (label) {
+      essentialParts.push(label.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 25));
+    }
+    // 5. For other elements, use their text content
+    else if (ownText && tagName !== 'form') {
+      essentialParts.push(ownText.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 25));
+    }
+    
+    // Always add type for clarity
+    essentialParts.push(type);
+    
+    // Always add index for uniqueness
+    essentialParts.push(index.toString());
+    
+    // Create the final ID
+    let finalId = essentialParts.join('_')
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+    
+    // Ensure it starts with a letter for valid CSS selector
+    if (!/^[a-zA-Z]/.test(finalId)) {
+      finalId = `element_${finalId}`;
+    }
+    
+    return finalId;
   }
 
   // First, clear old data-mcp attributes to handle removed elements

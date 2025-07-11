@@ -34,55 +34,119 @@ export class DOMMonitor {
       else if (waitForFunction) {
         await page.waitForFunction(waitForFunction, { timeout });
       }
-      // Method 4: Smart DOM change detection
+      // Method 4: Smart DOM change detection with proper cleanup
       else {
-        // Wait for any of these common AJAX indicators
-        await Promise.race([
-          // Network idle (no requests for 500ms)
-          page.waitForNavigation({ waitUntil: 'networkidle0', timeout }).catch(() => null),
-          
-          // DOM mutations have settled
-          page.evaluate((debounce: number) => {
-            return new Promise((resolve) => {
-              let timeoutId: NodeJS.Timeout;
-              const observer = new MutationObserver(() => {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => {
+        // Create an abort controller for cleanup
+        const abortController = new AbortController();
+        const cleanup = () => abortController.abort();
+        
+        try {
+          // Wait for any of these common AJAX indicators
+          const result = await Promise.race([
+            // Network idle (no requests for 500ms) - wrapped with cleanup
+            new Promise((resolve) => {
+              if (abortController.signal.aborted) {
+                resolve(false);
+                return;
+              }
+              
+              const navPromise = page.waitForNavigation({ waitUntil: 'networkidle0', timeout })
+                .then(() => {
+                  if (!abortController.signal.aborted) {
+                    cleanup();
+                    resolve(true);
+                  }
+                })
+                .catch(() => {
+                  if (!abortController.signal.aborted) {
+                    resolve(false);
+                  }
+                });
+              
+              // Listen for abort signal
+              abortController.signal.addEventListener('abort', () => {
+                // Cancel the navigation wait if possible
+                resolve(false);
+              });
+            }),
+            
+            // DOM mutations have settled
+            page.evaluate((debounce: number) => {
+              return new Promise((resolve) => {
+                let timeoutId: NodeJS.Timeout;
+                const observer = new MutationObserver(() => {
+                  clearTimeout(timeoutId);
+                  timeoutId = setTimeout(() => {
+                    observer.disconnect();
+                    resolve(true);
+                  }, debounce);
+                });
+                
+                observer.observe(document.body, {
+                  childList: true,
+                  subtree: true,
+                  attributes: true,
+                  characterData: true
+                });
+                
+                // Fallback timeout
+                setTimeout(() => {
                   observer.disconnect();
                   resolve(true);
-                }, debounce);
+                }, 5000);
               });
-              
-              observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                characterData: true
-              });
-              
-              // Fallback timeout
-              setTimeout(() => {
-                observer.disconnect();
-                resolve(true);
-              }, 5000);
-            });
-          }, debounceMs),
-          
-          // Common loading indicators disappear
-          page.waitForFunction(() => {
-            const loadingSelectors = [
-              '.loading', '.spinner', '.loader', 
-              '[data-loading]', '[aria-busy="true"]',
-              '.progress', '.placeholder'
-            ];
+            }, debounceMs).then((result: any) => {
+              cleanup();
+              return result;
+            }),
             
-            for (const selector of loadingSelectors) {
-              const elements = document.querySelectorAll(selector);
-              if (elements.length > 0) return false;
-            }
-            return true;
-          }, { timeout }),
-        ]);
+            // Common loading indicators disappear - wrapped with cleanup
+            new Promise((resolve) => {
+              if (abortController.signal.aborted) {
+                resolve(false);
+                return;
+              }
+              
+              const funcPromise = page.waitForFunction(() => {
+                const loadingSelectors = [
+                  '.loading', '.spinner', '.loader', 
+                  '[data-loading]', '[aria-busy="true"]',
+                  '.progress', '.placeholder'
+                ];
+                
+                for (const selector of loadingSelectors) {
+                  const elements = document.querySelectorAll(selector);
+                  if (elements.length > 0) return false;
+                }
+                return true;
+              }, { timeout })
+                .then(() => {
+                  if (!abortController.signal.aborted) {
+                    cleanup();
+                    resolve(true);
+                  }
+                })
+                .catch(() => {
+                  if (!abortController.signal.aborted) {
+                    resolve(false);
+                  }
+                });
+              
+              // Listen for abort signal
+              abortController.signal.addEventListener('abort', () => {
+                // Cancel the wait if possible
+                resolve(false);
+              });
+            }),
+          ]);
+          
+          // Ensure cleanup happens
+          cleanup();
+          return result;
+        } catch (error) {
+          cleanup();
+          throw error;
+        }
       }
 
       // Additional stabilization wait

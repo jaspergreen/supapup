@@ -60,7 +60,12 @@ export class NavigationMonitor {
       // Execute action and wait for navigation in parallel
       const [actionResult, navigationResult] = await Promise.all([
         action(),
-        page.waitForNavigation({ timeout, waitUntil }).catch(() => null)
+        // Wrap navigation promise to prevent listener leaks
+        new Promise((resolve) => {
+          page.waitForNavigation({ timeout, waitUntil })
+            .then(() => resolve(true))
+            .catch(() => resolve(null));
+        })
       ]);
       
       return {

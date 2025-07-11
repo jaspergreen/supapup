@@ -247,7 +247,14 @@ export class StorageTools {
   }
 
   // Cleanup
-  cleanup() {
+  async cleanup() {
+    if (this.cdpSession) {
+      try {
+        await this.cdpSession.detach();
+      } catch (err) {
+        // Ignore detach errors
+      }
+    }
     this.page = null;
     this.cdpSession = null;
   }

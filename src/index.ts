@@ -96,6 +96,7 @@ import { NavigationMonitor } from './navigation-monitor.js';
 import { DevToolsElements } from './devtools-elements.js';
 import { AgentPageScript } from './agent-page-script.js';
 import { StorageTools } from './storage-tools.js';
+import { WaitStateManager } from './wait-state-manager.js';
 import * as fs from 'fs';
 
 // Apply stealth plugin
@@ -161,6 +162,9 @@ export class SupapupServer {
   private humanInteraction: HumanInteraction | null = null;
   private currentManifest: any = null;
   private screenshotChunkData: Map<string, any> | null = null;
+  private cdpSession: any | null = null; // Store CDP session for reuse
+  private waitStateManager: WaitStateManager;
+  private navigationListeners: Map<string, Function> = new Map();
 
   constructor() {
     this.server = new Server(
@@ -175,6 +179,7 @@ export class SupapupServer {
       }
     );
 
+    this.waitStateManager = WaitStateManager.getInstance();
     this.setupHandlers();
   }
 
@@ -401,6 +406,11 @@ export class SupapupServer {
           inputSchema: { type: 'object', properties: {} },
         },
         {
+          name: 'network_debug_all_logs',
+          description: 'DEBUG: Show all captured network logs with isAPI status',
+          inputSchema: { type: 'object', properties: {} },
+        },
+        {
           name: 'network_replay_request',
           description: 'Replay an API request with modified payload/headers',
           inputSchema: {
@@ -563,13 +573,13 @@ export class SupapupServer {
         },
         {
           name: 'devtools_modify_css',
-          description: 'Modify CSS properties of an element through DevTools',
+          description: 'Modify CSS properties of an element through DevTools. IMPORTANT: Use exact parameter names: "selector", "property", "value" (NOT element_selector, property_name, or property_value). Example: {"selector": "h1", "property": "background", "value": "red"}',
           inputSchema: {
             type: 'object',
             properties: {
-              selector: { type: 'string', description: 'CSS selector of the element to modify' },
-              property: { type: 'string', description: 'CSS property name (e.g., "display", "color", "width")' },
-              value: { type: 'string', description: 'CSS property value (e.g., "none", "red", "100px")' },
+              selector: { type: 'string', description: 'CSS selector of the element to modify (use "selector" not "element_selector")' },
+              property: { type: 'string', description: 'CSS property name like "background", "color", "transform" (use "property" not "property_name")' },
+              value: { type: 'string', description: 'CSS property value like "red", "scale(1.2)", "none" (use "value" not "property_value")' },
             },
             required: ['selector', 'property', 'value'],
           },
@@ -798,6 +808,8 @@ export class SupapupServer {
           return await this.networkTools!.getAPILogs(request.params.arguments || {});
         case 'network_clear_logs':
           return await this.networkTools!.clearLogs();
+        case 'network_debug_all_logs':
+          return await this.networkTools!.debugAllLogs();
         case 'network_replay_request':
           return await this.networkTools!.replayAPIRequest(request.params.arguments || {});
         case 'network_intercept_requests':
@@ -846,18 +858,47 @@ export class SupapupServer {
               content: [{ type: 'text', text: '❌ DevTools Elements not initialized. Please wait a few seconds after navigation.' }],
             };
           }
+          
+          // Validate required parameters
+          const cssParams = request.params.arguments as any;
+          if (!cssParams.selector || !cssParams.property || !cssParams.value) {
+            const missing = [];
+            if (!cssParams.selector) missing.push('selector');
+            if (!cssParams.property) missing.push('property');
+            if (!cssParams.value) missing.push('value');
+            
+            // Check for common parameter naming mistakes
+            const suggestions = [];
+            if (cssParams.element_selector) suggestions.push('Use "selector" instead of "element_selector"');
+            if (cssParams.property_name) suggestions.push('Use "property" instead of "property_name"');
+            if (cssParams.property_value) suggestions.push('Use "value" instead of "property_value"');
+            
+            let errorMsg = `❌ Missing required parameters: ${missing.join(', ')}\n\n`;
+            errorMsg += `Required format: {"selector": "h1", "property": "background", "value": "red"}`;
+            if (suggestions.length > 0) {
+              errorMsg += `\n\n💡 Parameter naming issues detected:\n${suggestions.join('\n')}`;
+            }
+            
+            return {
+              content: [{ type: 'text', text: errorMsg }],
+            };
+          }
+          
           // Try to initialize DevToolsElements if not already done
           if (!this.devToolsElements.isInitialized()) {
             try {
-              const client = await this.page.target().createCDPSession();
-              await this.devToolsElements.initialize(this.page, client);
+              // Reuse existing CDP session or create a new one
+              if (!this.cdpSession) {
+                this.cdpSession = await this.page.target().createCDPSession();
+              }
+              await this.devToolsElements.initialize(this.page, this.cdpSession);
             } catch (err) {
               return {
                 content: [{ type: 'text', text: '❌ Failed to initialize DevTools Elements. Please try again.' }],
               };
             }
           }
-          return await this.devToolsElements.modifyCSS(request.params.arguments as { selector: string; property: string; value: string });
+          return await this.devToolsElements.modifyCSS(cssParams as { selector: string; property: string; value: string });
         case 'devtools_highlight_element':
           if (!this.devToolsElements) {
             return {
@@ -959,13 +1000,18 @@ export class SupapupServer {
         this.page = await this.browser.newPage();
       }
       
+      // Clean up any existing navigation listeners first
+      this.cleanupNavigationListeners();
+      
       // Set up page crash detection
-      this.page.on('error', (error: Error) => {
+      const errorHandler = (error: Error) => {
         console.error('[Page] Page crashed:', error);
-      });
+      };
+      this.page.on('error', errorHandler);
+      this.navigationListeners.set('error', errorHandler);
       
       // Set up console error monitoring for JavaScript errors
-      this.page.on('console', (msg) => {
+      const consoleHandler = (msg: any) => {
         if (msg.type() === 'error') {
           const text = msg.text();
           // Detect memory-related errors
@@ -973,11 +1019,13 @@ export class SupapupServer {
             console.error('[Page] Memory exhaustion detected:', text);
           }
         }
-      });
+      };
+      this.page.on('console', consoleHandler);
+      this.navigationListeners.set('console', consoleHandler);
       
       // Intercept navigation attempts to prevent crashes
       await this.page.setRequestInterception(true);
-      this.page.on('request', (request) => {
+      const requestHandler = (request: any) => {
         const url = request.url();
         
         // Log all navigation attempts for debugging
@@ -996,7 +1044,9 @@ export class SupapupServer {
         }
         
         request.continue();
-      });
+      };
+      this.page.on('request', requestHandler);
+      this.navigationListeners.set('request', requestHandler);
       
       
       // Wait for page to be fully ready before proceeding
@@ -1073,6 +1123,7 @@ export class SupapupServer {
       };
       
       this.page.on('response', onResponse);
+      this.navigationListeners.set('response', onResponse);
       
       // Inject enhanced dialog overrides before navigation
       await this.page.evaluateOnNewDocument(() => {
@@ -1387,8 +1438,19 @@ export class SupapupServer {
         
         // Initialize DevToolsElements with CDP session immediately
         try {
-          const client = await this.page.target().createCDPSession();
-          await this.devToolsElements.initialize(this.page, client);
+          // Clean up old CDP session if it exists
+          if (this.cdpSession) {
+            try {
+              await this.cdpSession.detach();
+            } catch (e) {
+              // Ignore errors when detaching
+            }
+            this.cdpSession = null;
+          }
+          
+          // Create new CDP session
+          this.cdpSession = await this.page.target().createCDPSession();
+          await this.devToolsElements.initialize(this.page, this.cdpSession);
           // console.error('[Navigate] DevToolsElements initialized with CDP');
         } catch (err) {
           // console.error('[Navigate] DevToolsElements CDP setup error:', err);
@@ -1552,7 +1614,24 @@ export class SupapupServer {
       throw new Error('No page loaded. Navigate to a page first.');
     }
 
+    // Temporarily capture console.error to filter warnings
+    const originalConsoleError = console.error;
+    const capturedErrors: string[] = [];
+    
+    console.error = (...args: any[]) => {
+      const message = args.join(' ');
+      // Filter out MaxListenersExceededWarning
+      if (!message.includes('MaxListenersExceededWarning') && 
+          !message.includes('Possible EventTarget memory leak')) {
+        capturedErrors.push(message);
+        originalConsoleError(...args);
+      }
+    };
+
     try {
+      // Clean up any previous wait states before starting new action
+      await this.waitStateManager.cleanup(this.page);
+      
       // Store original URL before action
       const originalUrl = this.page.url();
       
@@ -1560,14 +1639,7 @@ export class SupapupServer {
       const shouldWait = args.waitForChanges !== false;
       
       if (shouldWait) {
-        await this.page.evaluate(() => {
-          (window as any).__MUTATION_DETECTED__ = false;
-          const observer = new MutationObserver(() => {
-            (window as any).__MUTATION_DETECTED__ = true;
-          });
-          observer.observe(document.body, {childList: true, subtree: true, attributes: true});
-          (window as any).__MUTATION_OBSERVER__ = observer;
-        });
+        await this.waitStateManager.setupMutationObserver(this.page);
       }
       
       // Execute the action
@@ -1595,7 +1667,6 @@ export class SupapupServer {
           // Check if mutations were detected
           const mutationsDetected = await this.page.evaluate(() => {
             const detected = (window as any).__MUTATION_DETECTED__;
-            (window as any).__MUTATION_OBSERVER__?.disconnect();
             return detected;
           });
           
@@ -1705,6 +1776,87 @@ export class SupapupServer {
         ],
       };
     } catch (error: any) {
+      // Enhanced error handling with helpful alternatives
+      const errorMessage = error.toString();
+      
+      // Check if this is an "element not found" error
+      if (errorMessage.includes('Element not found:') || errorMessage.includes('not found')) {
+        const actionId = args.actionId;
+        
+        // Get current elements to suggest alternatives
+        try {
+          const manifest = await this.page.evaluate(() => {
+            const agentPage = (window as any).__AGENT_PAGE__;
+            return agentPage ? agentPage.getManifest() : null;
+          });
+          
+          let errorResponse = `❌ Element not found: "${actionId}"\n\n`;
+          errorResponse += `💡 This could happen because:\n`;
+          errorResponse += `   • The page has changed since the element list was generated\n`;
+          errorResponse += `   • The element was dynamically created/removed\n`;
+          errorResponse += `   • The element ID has changed due to page updates\n\n`;
+          
+          errorResponse += `🔧 Try these solutions:\n\n`;
+          errorResponse += `1️⃣ **Refresh the page mapping:**\n`;
+          errorResponse += `   agent_remap_page() - Re-scan all elements\n\n`;
+          
+          errorResponse += `2️⃣ **Take a screenshot for visual debugging:**\n`;
+          errorResponse += `   screenshot_capture() - See current page state\n\n`;
+          
+          errorResponse += `3️⃣ **Use visual element map:**\n`;
+          errorResponse += `   devtools_visual_element_map() - Get numbered elements overlay\n\n`;
+          
+          // Find similar elements if manifest is available
+          if (manifest && manifest.elements) {
+            const similarElements = manifest.elements
+              .filter((el: any) => el.id.toLowerCase().includes('welcome') || 
+                                  el.id.toLowerCase().includes('demo') ||
+                                  el.id.toLowerCase().includes('user') ||
+                                  el.id.toLowerCase().includes('link'))
+              .slice(0, 5); // Limit to 5 suggestions
+              
+            if (similarElements.length > 0) {
+              errorResponse += `4️⃣ **Similar elements found:**\n`;
+              similarElements.forEach((el: any) => {
+                errorResponse += `   • ${el.id} (${el.type}) - ${el.action}\n`;
+              });
+              errorResponse += `\n`;
+            }
+          }
+          
+          errorResponse += `5️⃣ **Wait for dynamic changes:**\n`;
+          errorResponse += `   agent_wait_for_changes() - Wait for page updates\n\n`;
+          
+          errorResponse += `Original error: ${errorMessage}`;
+          
+          return {
+            content: [
+              {
+                type: 'text',
+                text: errorResponse,
+              },
+            ],
+          };
+        } catch (manifestError) {
+          // Fall back to basic error if we can't get manifest
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `❌ Element not found: "${actionId}"\n\n` +
+                      `💡 This might be due to dynamic DOM changes.\n\n` +
+                      `🔧 Try:\n` +
+                      `   • agent_remap_page() - Refresh element mapping\n` +
+                      `   • screenshot_capture() - Visual debugging\n` +
+                      `   • devtools_visual_element_map() - Numbered element overlay\n\n` +
+                      `Original error: ${errorMessage}`,
+              },
+            ],
+          };
+        }
+      }
+      
+      // For other errors, return enhanced but simpler message
       return {
         content: [
           {
@@ -1712,10 +1864,17 @@ export class SupapupServer {
             text: JSON.stringify({
               success: false,
               error: `Execution failed: ${error}`,
+              suggestion: "Try agent_remap_page() if elements seem outdated, or screenshot_capture() for visual debugging",
             }),
           },
         ],
       };
+    } finally {
+      // Restore original console.error
+      console.error = originalConsoleError;
+      
+      // Always cleanup wait states after action completes
+      await this.waitStateManager.cleanup(this.page);
     }
   }
 
@@ -1767,7 +1926,12 @@ export class SupapupServer {
       // If form was submitted, wait for navigation
       if (args.submitAfter && result.success) {
         try {
-          await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 5000 });
+          // Wrap navigation promise to prevent listener leaks
+          await new Promise((resolve, reject) => {
+            this.page!.waitForNavigation({ waitUntil: 'networkidle2', timeout: 5000 })
+              .then(() => resolve(true))
+              .catch((e) => reject(e));
+          });
           response += '\n✅ Form submitted and navigation completed';
         } catch (e) {
           // No navigation occurred, might be AJAX form
@@ -2285,15 +2449,35 @@ export class SupapupServer {
       throw new Error('No page loaded. Navigate to a page first.');
     }
 
+    // Clean up any existing wait states before starting
+    await this.waitStateManager.cleanup(this.page);
+
     try {
       const originalUrl = this.page.url();
       // console.error(`[WaitForChanges] Starting from URL: ${originalUrl}`);
       
-      // Wait for navigation or DOM changes
-      const navigationPromise = this.page.waitForNavigation({ 
-        timeout: args.timeout || 30000,
-        waitUntil: 'domcontentloaded' 
-      }).then(() => true).catch(() => false);
+      // Create navigation promise with immediate cleanup on resolution
+      let navigationResolved = false;
+      const navigationPromise = new Promise<boolean>((resolve) => {
+        const navPromise = this.page!.waitForNavigation({ 
+          timeout: args.timeout || 30000,
+          waitUntil: 'domcontentloaded'
+        });
+        
+        navPromise
+          .then(() => {
+            if (!navigationResolved) {
+              navigationResolved = true;
+              resolve(true);
+            }
+          })
+          .catch(() => {
+            if (!navigationResolved) {
+              navigationResolved = true;
+              resolve(false);
+            }
+          });
+      });
       
       // Also wait for DOM changes
       const domPromise = DOMMonitor.waitForChangesAndRemap(this.page, {
@@ -2593,6 +2777,11 @@ export class SupapupServer {
             const newPage = await this.browser!.newPage();
             await newPage.goto(`data:image/jpeg;base64,${firstChunkBase64}`);
             // console.error('[Screenshot] Opened first chunk in new tab');
+            
+            // Switch back to original tab
+            if (this.page) {
+              await this.page.bringToFront();
+            }
           } catch (error) {
             // console.error('[Screenshot] Failed to open screenshot in new tab:', error);
           }
@@ -2681,6 +2870,11 @@ export class SupapupServer {
           const newPage = await this.browser!.newPage();
           await newPage.goto(`data:image/jpeg;base64,${screenshotBase64}`);
           // console.error('[Screenshot] Opened element screenshot in new tab');
+          
+          // Switch back to original tab
+          if (this.page) {
+            await this.page.bringToFront();
+          }
         } catch (error) {
           // console.error('[Screenshot] Failed to open element screenshot in new tab:', error);
         }
@@ -2738,6 +2932,11 @@ export class SupapupServer {
         const newPage = await this.browser!.newPage();
         await newPage.goto(`data:image/jpeg;base64,${screenshotBase64}`);
         // console.error('[Screenshot] Opened screenshot in new tab');
+        
+        // Switch back to original tab
+        if (this.page) {
+          await this.page.bringToFront();
+        }
       } catch (error) {
         // console.error('[Screenshot] Failed to open screenshot in new tab:', error);
       }
@@ -2922,6 +3121,11 @@ export class SupapupServer {
       const newPage = await this.browser!.newPage();
       await newPage.goto(`data:image/jpeg;base64,${screenshotBase64}`);
       // console.error(`[Screenshot] Opened chunk ${chunk} in new tab`);
+      
+      // Switch back to original tab
+      if (this.page) {
+        await this.page.bringToFront();
+      }
     } catch (error) {
       // console.error('[Screenshot] Failed to open screenshot in new tab:', error);
     }
@@ -3104,6 +3308,25 @@ export class SupapupServer {
       this.devToolsElements = new DevToolsElements();
       this.networkTools = new NetworkTools(targetPage);
       this.pageAnalysis = new PageAnalysis(targetPage);
+      
+      // Initialize DevToolsElements with CDP session
+      try {
+        // Clean up old CDP session if it exists
+        if (this.cdpSession) {
+          try {
+            await this.cdpSession.detach();
+          } catch (e) {
+            // Ignore errors when detaching
+          }
+          this.cdpSession = null;
+        }
+        
+        // Create new CDP session for the new page
+        this.cdpSession = await targetPage.target().createCDPSession();
+        await this.devToolsElements.initialize(targetPage, this.cdpSession);
+      } catch (err) {
+        // console.error('[SwitchTab] DevToolsElements CDP setup error:', err);
+      }
 
       return {
         content: [
@@ -3131,16 +3354,71 @@ export class SupapupServer {
   // Cleanup method to remove event listeners from existing tools
   private async cleanupTools() {
     if (this.networkTools && typeof this.networkTools.cleanup === 'function') {
-      this.networkTools.cleanup();
+      await this.networkTools.cleanup();
     }
     if (this.debuggingTools && typeof this.debuggingTools.cleanup === 'function') {
       await this.debuggingTools.cleanup();
     }
+    if (this.devtools && typeof this.devtools.cleanup === 'function') {
+      await this.devtools.cleanup();
+    }
+    if (this.devToolsElements && typeof this.devToolsElements.cleanup === 'function') {
+      await this.devToolsElements.cleanup();
+    }
+    if (this.storageTools && typeof this.storageTools.cleanup === 'function') {
+      await this.storageTools.cleanup();
+    }
+    
+    // Clean up CDP session
+    if (this.cdpSession) {
+      try {
+        await this.cdpSession.detach();
+      } catch (e) {
+        // Ignore errors when detaching
+      }
+      this.cdpSession = null;
+    }
+    
+    // Clean up page listeners
+    this.cleanupPageListeners();
     // Add more cleanup for other tools if needed
+  }
+
+  // Clean up page event listeners
+  private cleanupPageListeners() {
+    if (this.page) {
+      // Remove all page event listeners
+      this.page.off('error');
+      this.page.off('console');
+      this.page.off('request');
+      this.page.off('response');
+      // Turn off request interception to clean up request listeners
+      this.page.setRequestInterception(false).catch(() => {
+        // Ignore errors when cleaning up
+      });
+    }
+    if (this.browser) {
+      this.browser.off('disconnected');
+    }
+  }
+
+  private cleanupNavigationListeners() {
+    if (this.page && this.navigationListeners.size > 0) {
+      // Remove all tracked navigation listeners
+      for (const [event, handler] of this.navigationListeners) {
+        this.page.off(event as any, handler as any);
+      }
+      this.navigationListeners.clear();
+    }
   }
 
   async closeBrowser() {
     if (this.browser) {
+      // Clean up wait states first
+      if (this.page) {
+        await this.waitStateManager.cleanup(this.page);
+      }
+      
       // Clean up tools before closing
       await this.cleanupTools();
       

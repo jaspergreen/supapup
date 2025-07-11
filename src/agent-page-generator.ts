@@ -597,10 +597,6 @@ export class AgentPageGenerator {
     lines.push('AGENT PAGE VIEW');
     lines.push('='.repeat(30));
     lines.push('');
-    
-    // Page summary
-    lines.push(manifest.summary);
-    lines.push('');
 
     // Forms section
     if (manifest.forms.length > 0) {
@@ -639,7 +635,7 @@ export class AgentPageGenerator {
       });
     }
 
-    // Standalone elements
+    // Categorize remaining elements by function
     const standaloneElements = manifest.elements.filter(el => 
       !manifest.forms.some(form => 
         form.fields.includes(el) || form.submit === el
@@ -648,12 +644,52 @@ export class AgentPageGenerator {
     );
 
     if (standaloneElements.length > 0) {
-      lines.push('🎛️ OTHER CONTROLS:');
-      standaloneElements.forEach(element => {
-        const expects = element.expects ? ` (${element.expects})` : '';
-        lines.push(`  • ${element.description} → ${element.id}${expects}`);
-      });
-      lines.push('');
+      // Group by function
+      const buttons = standaloneElements.filter(el => el.type === 'button');
+      const links = standaloneElements.filter(el => el.type === 'link');
+      const inputs = standaloneElements.filter(el => 
+        ['text', 'email', 'password', 'search', 'number'].includes(el.type)
+      );
+      const others = standaloneElements.filter(el => 
+        !buttons.includes(el) && !links.includes(el) && !inputs.includes(el)
+      );
+
+      // Show grouped elements with clearer labels
+      if (buttons.length > 0) {
+        lines.push('🎯 ACTIONS:');
+        buttons.forEach(element => {
+          const expects = element.expects ? ` (${element.expects})` : '';
+          lines.push(`  • ${element.description} → ${element.id}${expects}`);
+        });
+        lines.push('');
+      }
+
+      if (links.length > 0) {
+        lines.push('🔗 LINKS:');
+        links.forEach(element => {
+          const expects = element.expects ? ` (${element.expects})` : '';
+          lines.push(`  • ${element.description} → ${element.id}${expects}`);
+        });
+        lines.push('');
+      }
+
+      if (inputs.length > 0) {
+        lines.push('📝 INPUTS:');
+        inputs.forEach(element => {
+          const expects = element.expects ? ` (${element.expects})` : '';
+          lines.push(`  • ${element.description} → ${element.id}${expects}`);
+        });
+        lines.push('');
+      }
+
+      if (others.length > 0) {
+        lines.push('⚙️ CONTROLS:');
+        others.forEach(element => {
+          const expects = element.expects ? ` (${element.expects})` : '';
+          lines.push(`  • ${element.description} → ${element.id}${expects}`);
+        });
+        lines.push('');
+      }
     }
 
     lines.push('Usage: Use semantic IDs for interaction');

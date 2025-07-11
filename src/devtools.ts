@@ -43,6 +43,14 @@ export class DevToolsMonitor {
   private requestTimings: Map<string, number> = new Map();
   private requestDetails: Map<string, any> = new Map();
   private cdpSession: any;
+  private consoleHandler: (msg: any) => void = () => {};
+  private requestHandler: (request: any) => void = () => {};
+  private responseHandler: (response: any) => void = () => {};
+  private pageErrorHandler: (error: any) => void = () => {};
+  private requestFailedHandler: (request: any) => void = () => {};
+  private cdpRequestWillBeSentHandler: (params: any) => void = () => {};
+  private cdpResponseReceivedHandler: (params: any) => void = () => {};
+  private cdpLoadingFinishedHandler: (params: any) => void = () => {};
 
   constructor(page: Page) {
     this.page = page;
@@ -56,8 +64,8 @@ export class DevToolsMonitor {
   }
 
   private setupListeners() {
-    // Console logging
-    this.page.on('console', (msg: ConsoleMessage) => {
+    // Store handlers for cleanup
+    this.consoleHandler = (msg: ConsoleMessage) => {
       const location = msg.location();
       this.consoleLogs.push({
         timestamp: new Date(),
@@ -66,14 +74,13 @@ export class DevToolsMonitor {
         location: location.url ? `${location.url}:${location.lineNumber}:${location.columnNumber}` : undefined,
         stackTrace: msg.stackTrace()
       });
-    });
+    };
 
-    // Network monitoring
-    this.page.on('request', (request: HTTPRequest) => {
+    this.requestHandler = (request: HTTPRequest) => {
       this.requestTimings.set(request.url(), Date.now());
-    });
+    };
 
-    this.page.on('response', (response: HTTPResponse) => {
+    this.responseHandler = (response: HTTPResponse) => {
       const request = response.request();
       const startTime = this.requestTimings.get(request.url());
       const duration = startTime ? Date.now() - startTime : undefined;
@@ -89,20 +96,18 @@ export class DevToolsMonitor {
       });
       
       this.requestTimings.delete(request.url());
-    });
+    };
 
-    // Page errors
-    this.page.on('pageerror', (error: Error) => {
+    this.pageErrorHandler = (error: Error) => {
       this.consoleLogs.push({
         timestamp: new Date(),
         type: 'error',
         text: error.message,
         stackTrace: error.stack
       });
-    });
+    };
 
-    // Request failures
-    this.page.on('requestfailed', (request: HTTPRequest) => {
+    this.requestFailedHandler = (request: HTTPRequest) => {
       this.networkLogs.push({
         timestamp: new Date(),
         method: request.method(),
@@ -110,8 +115,19 @@ export class DevToolsMonitor {
         status: 0,
         type: request.resourceType()
       });
-    });
+    };
+
+    // Console logging
+    this.page.on('console', this.consoleHandler);
+    // Network monitoring
+    this.page.on('request', this.requestHandler);
+    this.page.on('response', this.responseHandler);
+    // Page errors
+    this.page.on('pageerror', this.pageErrorHandler);
+    // Request failures
+    this.page.on('requestfailed', this.requestFailedHandler);
   }
+
 
   // Get logs
   getConsoleLogs(filter?: { type?: string; since?: Date }): ConsoleLog[] {
@@ -388,7 +404,7 @@ export class DevToolsMonitor {
       await this.cdpSession.send('Network.enable');
       
       // Listen for request will be sent - captures headers and initiator
-      this.cdpSession.on('Network.requestWillBeSent', (params: any) => {
+      this.cdpRequestWillBeSentHandler = (params: any) => {
         const { requestId, request, initiator, type } = params;
         
         // Store request details for later
@@ -401,10 +417,11 @@ export class DevToolsMonitor {
           type: type,
           timestamp: Date.now()
         });
-      });
+      };
+      this.cdpSession.on('Network.requestWillBeSent', this.cdpRequestWillBeSentHandler);
       
       // Listen for response received - captures response headers
-      this.cdpSession.on('Network.responseReceived', (params: any) => {
+      this.cdpResponseReceivedHandler = (params: any) => {
         const { requestId, response } = params;
         const requestDetail = this.requestDetails.get(requestId);
         
@@ -414,10 +431,11 @@ export class DevToolsMonitor {
           requestDetail.statusText = response.statusText;
           requestDetail.mimeType = response.mimeType;
         }
-      });
+      };
+      this.cdpSession.on('Network.responseReceived', this.cdpResponseReceivedHandler);
       
       // Listen for loading finished to get response body
-      this.cdpSession.on('Network.loadingFinished', async (params: any) => {
+      this.cdpLoadingFinishedHandler = async (params: any) => {
         const { requestId } = params;
         const requestDetail = this.requestDetails.get(requestId);
         
@@ -450,7 +468,8 @@ export class DevToolsMonitor {
           // Clean up
           this.requestDetails.delete(requestId);
         }
-      });
+      };
+      this.cdpSession.on('Network.loadingFinished', this.cdpLoadingFinishedHandler);
       
     } catch (err) {
       // console.error('Failed to setup CDP listeners:', err);
@@ -520,5 +539,39 @@ export class DevToolsMonitor {
     }
     
     return logs;
+  }
+
+  // Cleanup method to remove all event listeners
+  async cleanup() {
+    try {
+      // Remove page event listeners using stored handlers
+      if (this.page) {
+        this.page.off('console', this.consoleHandler);
+        this.page.off('request', this.requestHandler);
+        this.page.off('response', this.responseHandler);
+        this.page.off('pageerror', this.pageErrorHandler);
+        this.page.off('requestfailed', this.requestFailedHandler);
+      }
+      
+      // Remove CDP session listeners
+      if (this.cdpSession) {
+        this.cdpSession.off('Network.requestWillBeSent', this.cdpRequestWillBeSentHandler);
+        this.cdpSession.off('Network.responseReceived', this.cdpResponseReceivedHandler);
+        this.cdpSession.off('Network.loadingFinished', this.cdpLoadingFinishedHandler);
+        // Detach the CDP session
+        this.cdpSession.detach().catch(() => {
+          // Ignore errors during detach
+        });
+      }
+      
+      // Clear data
+      this.networkLogs = [];
+      this.consoleLogs = [];
+      this.requestTimings.clear();
+      this.requestDetails.clear();
+      this.cdpSession = null;
+    } catch (error) {
+      // Ignore cleanup errors
+    }
   }
 }

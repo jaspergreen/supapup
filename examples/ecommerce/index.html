@@ -167,6 +167,8 @@
         showLoginBtn.addEventListener('click', () => {
             loginSection.style.display = 'block';
             showLoginBtn.style.display = 'none';
+            // Scroll to form for better visibility
+            loginSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
 
         loginForm.addEventListener('submit', async (e) => {

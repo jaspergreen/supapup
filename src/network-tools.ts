@@ -12,6 +12,9 @@ export interface NetworkLog {
   initiator?: any;
   isAPI?: boolean;
   duration?: number;
+  resourceType?: string;
+  size?: number;
+  name?: string;
 }
 
 export class NetworkTools {
@@ -21,35 +24,63 @@ export class NetworkTools {
   private requestHandler: (request: any) => void = () => {};
   private responseHandler: (response: any) => void = () => {};
   private consoleHandler: (msg: any) => void = () => {};
+  private cdpSession?: any;
+  private cdpRequestHandler?: (params: any) => void;
+  private cdpResponseHandler?: (params: any) => void;
 
   constructor(page: Page) {
     this.page = page;
-    this.setupNetworkMonitoring();
+    this.setupNetworkMonitoring().catch(console.error);
   }
 
-  private setupNetworkMonitoring() {
-    // Store handlers for cleanup
-    this.requestHandler = (request) => {
-      const log: NetworkLog = {
-        timestamp: new Date(),
-        method: request.method(),
-        url: request.url(),
-        requestHeaders: request.headers(),
-        requestPayload: request.postData(),
-        isAPI: this.isAPIRequest(request.url())
+  private async setupNetworkMonitoring() {
+    try {
+      // Enable Chrome DevTools Protocol Network domain
+      this.cdpSession = await this.page.target().createCDPSession();
+      await this.cdpSession.send('Network.enable');
+      console.log('[NetworkTools] CDP Network.enable() successful');
+
+      // Create handlers that we can later remove
+      this.cdpRequestHandler = (params) => {
+        const isAPI = this.isAPIRequest(params.type || 'unknown');
+        
+        const log: NetworkLog = {
+          timestamp: new Date(),
+          method: params.request.method,
+          url: params.request.url,
+          requestHeaders: params.request.headers,
+          requestPayload: params.request.postData,
+          isAPI: isAPI
+        };
+        this.networkLogs.push(log);
+        
+        // Debug logging
+        console.log(`[NetworkTools] CDP Request: ${params.request.method} ${params.request.url} - Type: "${params.type}", IsAPI: ${isAPI}`);
       };
-      this.networkLogs.push(log);
-    };
 
-    this.responseHandler = (response) => {
-      const log = this.networkLogs.find(l => l.url === response.url() && !l.status);
-      if (log) {
-        log.status = response.status();
-        log.responseHeaders = response.headers();
-        log.duration = Date.now() - log.timestamp.getTime();
-      }
-    };
+      this.cdpResponseHandler = (params) => {
+        const log = this.networkLogs.find(l => l.url === params.response.url && !l.status);
+        if (log) {
+          log.status = params.response.status;
+          log.responseHeaders = params.response.headers;
+          log.duration = Date.now() - log.timestamp.getTime();
+        }
+      };
 
+      // Listen to Network.requestWillBeSent for all requests
+      this.cdpSession.on('Network.requestWillBeSent', this.cdpRequestHandler);
+
+      // Listen to Network.responseReceived for response data
+      this.cdpSession.on('Network.responseReceived', this.cdpResponseHandler);
+
+      console.log('[NetworkTools] CDP event listeners attached');
+    } catch (error) {
+      console.error('[NetworkTools] CDP setup failed:', error);
+      // Fall back to Puppeteer page events if CDP fails
+      this.setupFallbackMonitoring();
+    }
+
+    // Keep console monitoring from page events
     this.consoleHandler = (msg) => {
       this.consoleLogs.push({
         timestamp: new Date(),
@@ -59,14 +90,56 @@ export class NetworkTools {
       });
     };
 
-    // Monitor network requests
-    this.page.on('request', this.requestHandler);
-    this.page.on('response', this.responseHandler);
     this.page.on('console', this.consoleHandler);
   }
 
+  private setupFallbackMonitoring() {
+    console.log('[NetworkTools] Using fallback Puppeteer monitoring');
+    // Fallback to original Puppeteer page events
+    this.requestHandler = (request) => {
+      const resourceType = request.resourceType();
+      const isAPI = this.isAPIRequest(resourceType);
+      const url = request.url();
+      const name = url.split('/').pop() || url;
+      
+      const log: NetworkLog = {
+        timestamp: new Date(),
+        method: request.method(),
+        url: url,
+        requestHeaders: request.headers(),
+        requestPayload: request.postData(),
+        isAPI: isAPI,
+        resourceType: resourceType,
+        name: name,
+        initiator: request.frame() ? { type: 'parser' } : { type: 'script' }
+      };
+      this.networkLogs.push(log);
+      
+      console.log(`[NetworkTools] Fallback Request: ${request.method()} ${request.url()} - Type: "${resourceType}", IsAPI: ${isAPI}`);
+    };
+
+    this.responseHandler = (response) => {
+      const log = this.networkLogs.find(l => l.url === response.url() && !l.status);
+      if (log) {
+        log.status = response.status();
+        log.responseHeaders = response.headers();
+        log.duration = Date.now() - log.timestamp.getTime();
+        
+        // Try to get response size from headers
+        const contentLength = response.headers()['content-length'];
+        if (contentLength) {
+          log.size = parseInt(contentLength, 10);
+        }
+      }
+    };
+
+    this.page.on('request', this.requestHandler);
+    this.page.on('response', this.responseHandler);
+  }
+
   // Cleanup method to remove event listeners
-  public cleanup() {
+  public async cleanup() {
+    // Remove Puppeteer page event listeners
     if (this.page && this.requestHandler) {
       this.page.off('request', this.requestHandler);
     }
@@ -76,31 +149,33 @@ export class NetworkTools {
     if (this.page && this.consoleHandler) {
       this.page.off('console', this.consoleHandler);
     }
+    
+    // Remove CDP session listeners
+    if (this.cdpSession) {
+      if (this.cdpRequestHandler) {
+        this.cdpSession.off('Network.requestWillBeSent', this.cdpRequestHandler);
+      }
+      if (this.cdpResponseHandler) {
+        this.cdpSession.off('Network.responseReceived', this.cdpResponseHandler);
+      }
+      
+      // Detach the CDP session
+      try {
+        await this.cdpSession.detach();
+      } catch (error) {
+        console.error('[NetworkTools] Error detaching CDP session:', error);
+      }
+      
+      this.cdpSession = undefined;
+    }
+    
+    console.log('[NetworkTools] Cleanup completed');
   }
 
-  private isAPIRequest(url: string): boolean {
-    // More inclusive API detection
-    // Exclude common static resources
-    const staticExtensions = /\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i;
-    const isStatic = staticExtensions.test(url);
-    
-    // Include common API patterns and AJAX requests
-    const apiPatterns = /\/(api|graphql|rest|ajax|data|service|endpoint|v\d+)\//i;
-    const hasApiPattern = apiPatterns.test(url);
-    
-    // Include requests that might be APIs based on response type
-    const possibleApiExtensions = /\.(json|xml)$/i;
-    const hasApiExtension = possibleApiExtensions.test(url);
-    
-    // Include any XHR/fetch that's not static
-    const isXhrFetch = !isStatic && (
-      url.includes('?') || // Has query params
-      /\.(php|aspx|jsp|py|rb|do)/.test(url) || // Dynamic extensions
-      hasApiPattern ||
-      hasApiExtension
-    );
-    
-    return isXhrFetch;
+  private isAPIRequest(resourceType: string): boolean {
+    // Handle both CDP capitalized values ("Fetch", "XHR") and Puppeteer lowercase values ("fetch", "xhr")
+    const type = resourceType.toLowerCase();
+    return type === 'xhr' || type === 'fetch';
   }
 
   async getConsoleLogs(args: any) {
@@ -146,10 +221,15 @@ export class NetworkTools {
         {
           type: 'text',
           text: `🌐 Network Logs (${recentLogs.length} requests)\n\n` +
-                recentLogs.map((log, i) => 
-                  `[${i + 1}] ${log.method} ${log.url}\n` +
-                  `    Status: ${log.status || 'pending'} | Duration: ${log.duration || 'N/A'}ms\n`
-                ).join('\n') +
+                recentLogs.map((log, i) => {
+                  const name = log.name || log.url.split('/').pop() || log.url;
+                  const size = log.size ? `${(log.size / 1024).toFixed(1)} kB` : 'N/A';
+                  const initiator = log.initiator ? `${log.initiator.type || 'unknown'}` : 'N/A';
+                  
+                  return `[${i + 1}] ${log.method} ${log.url}\n` +
+                         `    Status: ${log.status || 'pending'} | Type: ${log.resourceType || 'unknown'} | Duration: ${log.duration || 'N/A'}ms\n` +
+                         `    Initiator: ${initiator} | Size: ${size} | IsAPI: ${log.isAPI || false}\n`;
+                }).join('\n') +
                 `\n💡 Use --method or --status to filter`
         },
       ],
@@ -212,6 +292,24 @@ export class NetworkTools {
     };
   }
 
+  // Debug method to see all captured network logs with their isAPI status
+  async debugAllLogs() {
+    const logs = this.networkLogs.slice(-5); // Last 5 requests
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `🔍 DEBUG: Raw Network Log Objects (${logs.length} requests)\n\n` +
+                logs.map((log, i) => 
+                  `[${i + 1}] RAW LOG DATA:\n` +
+                  `${JSON.stringify(log, null, 2)}\n\n`
+                ).join('')
+        },
+      ],
+    };
+  }
+
   async replayAPIRequest(args: any) {
     try {
       const { url, method = 'GET', headers = {}, payload, modifyOriginal = true } = args;
@@ -222,27 +320,38 @@ export class NetworkTools {
       // Perform the request
       const response = await this.page.evaluate(async ({ url, method, headers, payload }) => {
         try {
+          // Create AbortController with timeout to prevent memory leaks
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(() => {
+            abortController.abort();
+          }, 30000); // 30 second timeout
+          
           const options: RequestInit = {
             method,
             headers: {
               'Content-Type': 'application/json',
               ...headers
-            }
+            },
+            signal: abortController.signal // Add abort signal
           };
           
           if (payload && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
             options.body = typeof payload === 'string' ? payload : JSON.stringify(payload);
           }
           
+          const startTime = Date.now();
           const response = await fetch(url, options);
           const responseBody = await response.text();
+          
+          // Clean up timeout
+          clearTimeout(timeoutId);
           
           return {
             status: response.status,
             statusText: response.statusText,
             headers: Object.fromEntries(response.headers.entries()),
             body: responseBody,
-            duration: Date.now() // Approximate
+            duration: Date.now() - startTime
           };
         } catch (error: any) {
           return { error: error.message };

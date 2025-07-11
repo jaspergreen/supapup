@@ -175,7 +175,24 @@ export class DevToolsElements {
       const result = await this.page.evaluate(({ selector, property, value }) => {
         const element = document.querySelector(selector);
         if (!element) {
-          return { success: false, error: 'Element not found' };
+          // Get available elements for better error message
+          const availableElements = Array.from(document.querySelectorAll('*'))
+            .filter(el => el.tagName && !['SCRIPT', 'STYLE', 'META', 'LINK', 'HEAD', 'HTML'].includes(el.tagName))
+            .map(el => {
+              const tag = el.tagName.toLowerCase();
+              const id = el.id ? `#${el.id}` : '';
+              const classes = el.className ? `.${el.className.split(' ').join('.')}` : '';
+              const text = el.textContent?.trim().substring(0, 30) || '';
+              return `${tag}${id}${classes} ${text ? `"${text}..."` : ''}`.trim();
+            })
+            .slice(0, 10); // Limit to first 10 for readability
+            
+          return { 
+            success: false, 
+            error: 'Element not found',
+            selector: selector,
+            availableElements: availableElements
+          };
         }
 
         // Store original value
@@ -199,10 +216,25 @@ export class DevToolsElements {
       }, { selector: args.selector, property: args.property, value: args.value });
 
       if (!result.success) {
+        let errorMessage = `❌ Element not found: "${args.selector}"\n\n`;
+        
+        if (result.availableElements && result.availableElements.length > 0) {
+          errorMessage += `📋 Available elements on this page:\n`;
+          result.availableElements.forEach((el: string) => {
+            errorMessage += `  • ${el}\n`;
+          });
+          errorMessage += `\n💡 Try using one of these selectors instead, or use devtools_visual_element_map to see all elements visually.`;
+        } else {
+          errorMessage += `💡 No suitable elements found. Try:\n`;
+          errorMessage += `  1. Use devtools_visual_element_map to see all page elements\n`;
+          errorMessage += `  2. Check if you're on the right page\n`;
+          errorMessage += `  3. Use more specific selectors like #id or .class`;
+        }
+        
         return {
           content: [{ 
             type: 'text', 
-            text: `❌ ${result.error}` 
+            text: errorMessage
           }],
         };
       }
@@ -841,5 +873,13 @@ Use devtools_modify_css to change any of these properties.`
         }],
       };
     }
+  }
+
+  // Cleanup method
+  async cleanup() {
+    // Note: We don't detach the CDP session here because it's managed externally
+    // The CDP session is passed in from index.ts and should be cleaned up there
+    this.page = null;
+    this.client = null;
   }
 }
