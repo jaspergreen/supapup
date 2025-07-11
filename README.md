@@ -121,7 +121,7 @@ npm install -g @anthropic/claude-cli
 
 2. Configure Supapup as an MCP server:
 ```bash
-claude mcp add supapup "npx supapup"
+claude mcp add supapup "supapup"
 ```
 
 3. Start using Supapup in Claude:
@@ -162,7 +162,7 @@ npm install supapup
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/supapup.git
+git clone https://github.com/jaspergreen/supapup.git
 cd supapup
 npm install
 npm run build
@@ -174,7 +174,7 @@ npm run build
 
 ```bash
 # Add Supapup to Claude CLI
-claude mcp add supapup "npx supapup"
+claude mcp add supapup "supapup"
 
 # Use it in a conversation
 claude "Navigate to https://example.com and click the login button"
@@ -308,7 +308,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/supapup.git
+git clone https://github.com/jaspergreen/supapup.git
 cd supapup
 
 # Install dependencies
@@ -342,9 +342,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/yourusername/supapup)
+- [GitHub Repository](https://github.com/jaspergreen/supapup)
 - [NPM Package](https://www.npmjs.com/package/supapup)
-- [Issue Tracker](https://github.com/yourusername/supapup/issues)
+- [Issue Tracker](https://github.com/jaspergreen/supapup/issues)
 
 ---
 

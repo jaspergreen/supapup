@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+const { spawn } = require('child_process');
+const path = require('path');
+
+// Find the actual supapup installation
+const supapupPath = require.resolve('supapup/dist/index.js');
+
+// Start the MCP server
+const server = spawn('node', [supapupPath], {
+  stdio: 'inherit',
+  env: process.env
+});
+
+server.on('error', (err) => {
+  console.error('Failed to start Supapup MCP server:', err);
+  process.exit(1);
+});
+
+server.on('exit', (code) => {
+  process.exit(code);
+});

@@ -1,6 +1,6 @@
 {
   "name": "supapup",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "⚡ Lightning-fast MCP browser dev tool. Navigate → Get instant structured data. No screenshots needed! Puppeteer: 📸 → CSS selectors → JS eval. Supapup: semantic IDs ready to use. 10x faster, 90% fewer tokens.",
   "keywords": [
     "mcp",
@@ -33,12 +33,14 @@
   },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE",
     "CLAUDE.md"
   ],
   "bin": {
-    "supapup": "dist/cli.js"
+    "supapup": "bin/supapup",
+    "supapup-cli": "dist/cli.js"
   },
   "engines": {
     "node": ">=18.0.0"
