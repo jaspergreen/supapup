@@ -1073,11 +1073,23 @@ export class SupapupServer {
         ],
       };
     } catch (error: any) {
+      // Provide detailed error information
+      let errorMessage = `Failed to launch browser: ${error?.message || error}`;
+      
+      // Add common troubleshooting tips
+      if (error?.message?.includes('No usable sandbox') || error?.message?.includes('Running as root')) {
+        errorMessage += '\n\nTry running with --no-sandbox flag or as a non-root user.';
+      } else if (error?.message?.includes('Failed to launch the browser process')) {
+        errorMessage += '\n\nPuppeteer may not have downloaded the browser. Try reinstalling the package.';
+      } else if (error?.message?.includes('Timeout')) {
+        errorMessage += '\n\nBrowser launch timed out. This might be due to system resources or missing dependencies.';
+      }
+      
       return {
         content: [
           {
             type: 'text',
-            text: `Failed to launch browser: ${error?.message || error}`,
+            text: errorMessage,
           },
         ],
       };

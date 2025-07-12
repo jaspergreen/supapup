@@ -34,6 +34,7 @@
   "files": [
     "dist",
     "bin",
+    "scripts",
     "README.md",
     "LICENSE",
     "CLAUDE.md"
@@ -53,6 +54,7 @@
     "supapup": "node dist/cli.js",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
+    "postinstall": "node scripts/postinstall.js || true",
     "build:link": "npm run build && npm link"
   },
   "dependencies": {
