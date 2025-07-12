@@ -960,6 +960,7 @@ export class SupapupServer {
           throw new Error(`Unknown tool: ${request.params.name}`);
       }
     });
+
   }
 
   // Core browser management
@@ -1667,17 +1668,58 @@ export class SupapupServer {
       }
       
       // Execute the action
-      const result = await this.page.evaluate(
-        (actionId: string, params: any) => {
-          const agentPage = (window as any).__AGENT_PAGE__;
-          if (agentPage && agentPage.execute) {
-            return agentPage.execute(actionId, params);
+      let result;
+      try {
+        result = await this.page.evaluate(
+          (actionId: string, params: any) => {
+            const agentPage = (window as any).__AGENT_PAGE__;
+            if (agentPage && agentPage.execute) {
+              return agentPage.execute(actionId, params);
+            }
+            throw new Error(`Agent page interface not found`);
+          },
+          args.actionId,
+          args.params || {}
+        );
+      } catch (error: any) {
+        // If execution context was destroyed, this likely means navigation occurred
+        if (error.message && error.message.includes('Execution context was destroyed')) {
+          // Immediately check for navigation
+          const navCheck = await NavigationMonitor.checkForNavigation(this.page, originalUrl);
+          if (navCheck.navigated) {
+            // Handle navigation case
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const newManifest = await this.injectAgentPageScript();
+            if (!newManifest) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `❌ Failed to generate agent page after navigation to: ${navCheck.newUrl}`,
+                  },
+                ],
+              };
+            }
+            
+            const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `✅ Action executed: ${args.actionId}\n\n` +
+                        `🔄 Navigated to: ${navCheck.newUrl}\n\n` +
+                        `${agentPage}\n\n` +
+                        `Interface updated at window.__AGENT_PAGE__`,
+                },
+              ],
+            };
           }
-          throw new Error(`Agent page interface not found`);
-        },
-        args.actionId,
-        args.params || {}
-      );
+        }
+        // Re-throw if it's not a context destroyed error or no navigation detected
+        throw error;
+      }
 
       if (shouldWait) {
         // Wait a bit for mutations to occur
@@ -3744,6 +3786,21 @@ export class SupapupServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     // console.error('Supapup MCP server running on stdio');
+    
+    // Handle process termination signals
+    process.on('SIGINT', async () => {
+      if (this.browser) {
+        await this.closeBrowser();
+      }
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+      if (this.browser) {
+        await this.closeBrowser();
+      }
+      process.exit(0);
+    });
   }
 }
 
