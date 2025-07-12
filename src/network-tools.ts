@@ -30,7 +30,21 @@ export class NetworkTools {
 
   constructor(page: Page) {
     this.page = page;
-    this.setupNetworkMonitoring().catch(console.error);
+    this.setupNetworkMonitoring().catch((error) => {
+      try {
+        console.error('[NetworkTools] Setup error:', error);
+      } catch (e) {
+        // Silently ignore EPIPE errors when stdio is closed
+      }
+    });
+  }
+
+  private safeLog(message: string) {
+    try {
+      console.log(message);
+    } catch (error) {
+      // Silently ignore EPIPE errors when stdio is closed
+    }
   }
 
   private async setupNetworkMonitoring() {
@@ -38,7 +52,7 @@ export class NetworkTools {
       // Enable Chrome DevTools Protocol Network domain
       this.cdpSession = await this.page.target().createCDPSession();
       await this.cdpSession.send('Network.enable');
-      console.log('[NetworkTools] CDP Network.enable() successful');
+      this.safeLog('[NetworkTools] CDP Network.enable() successful');
 
       // Create handlers that we can later remove
       this.cdpRequestHandler = (params) => {
@@ -55,7 +69,7 @@ export class NetworkTools {
         this.networkLogs.push(log);
         
         // Debug logging
-        console.log(`[NetworkTools] CDP Request: ${params.request.method} ${params.request.url} - Type: "${params.type}", IsAPI: ${isAPI}`);
+        this.safeLog(`[NetworkTools] CDP Request: ${params.request.method} ${params.request.url} - Type: "${params.type}", IsAPI: ${isAPI}`);
       };
 
       this.cdpResponseHandler = (params) => {
@@ -73,9 +87,9 @@ export class NetworkTools {
       // Listen to Network.responseReceived for response data
       this.cdpSession.on('Network.responseReceived', this.cdpResponseHandler);
 
-      console.log('[NetworkTools] CDP event listeners attached');
+      this.safeLog('[NetworkTools] CDP event listeners attached');
     } catch (error) {
-      console.error('[NetworkTools] CDP setup failed:', error);
+      this.safeLog(`[NetworkTools] CDP setup failed: ${error}`);
       // Fall back to Puppeteer page events if CDP fails
       this.setupFallbackMonitoring();
     }
@@ -94,7 +108,7 @@ export class NetworkTools {
   }
 
   private setupFallbackMonitoring() {
-    console.log('[NetworkTools] Using fallback Puppeteer monitoring');
+    this.safeLog('[NetworkTools] Using fallback Puppeteer monitoring');
     // Fallback to original Puppeteer page events
     this.requestHandler = (request) => {
       const resourceType = request.resourceType();
@@ -115,7 +129,7 @@ export class NetworkTools {
       };
       this.networkLogs.push(log);
       
-      console.log(`[NetworkTools] Fallback Request: ${request.method()} ${request.url()} - Type: "${resourceType}", IsAPI: ${isAPI}`);
+      this.safeLog(`[NetworkTools] Fallback Request: ${request.method()} ${request.url()} - Type: "${resourceType}", IsAPI: ${isAPI}`);
     };
 
     this.responseHandler = (response) => {
@@ -163,13 +177,13 @@ export class NetworkTools {
       try {
         await this.cdpSession.detach();
       } catch (error) {
-        console.error('[NetworkTools] Error detaching CDP session:', error);
+        this.safeLog(`[NetworkTools] Error detaching CDP session: ${error}`);
       }
       
       this.cdpSession = undefined;
     }
     
-    console.log('[NetworkTools] Cleanup completed');
+    this.safeLog('[NetworkTools] Cleanup completed');
   }
 
   private isAPIRequest(resourceType: string): boolean {
