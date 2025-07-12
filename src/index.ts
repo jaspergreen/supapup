@@ -1714,28 +1714,30 @@ export class SupapupServer {
           args.params || {}
         );
       } catch (error: any) {
-        // If execution context was destroyed, this likely means navigation occurred
+        // If execution context was destroyed, this likely means navigation or major DOM update occurred
         if (error.message && error.message.includes('Execution context was destroyed')) {
-          // Immediately check for navigation
+          // Wait a bit for potential navigation or AJAX to complete
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Check for navigation
           const navCheck = await NavigationMonitor.checkForNavigation(this.page, originalUrl);
+          
+          // Whether navigated or not, we need to reinject our scripts
+          const newManifest = await this.injectAgentPageScript();
+          if (!newManifest) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `❌ Failed to regenerate agent page after major DOM update`,
+                },
+              ],
+            };
+          }
+          
+          const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
+          
           if (navCheck.navigated) {
-            // Handle navigation case
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            const newManifest = await this.injectAgentPageScript();
-            if (!newManifest) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: `❌ Failed to generate agent page after navigation to: ${navCheck.newUrl}`,
-                  },
-                ],
-              };
-            }
-            
-            const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
-            
             return {
               content: [
                 {
@@ -1747,9 +1749,22 @@ export class SupapupServer {
                 },
               ],
             };
+          } else {
+            // AJAX update case - DOM was replaced but URL didn't change
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `✅ Action executed: ${args.actionId}\n\n` +
+                        `🔄 Page updated with ${newManifest.elements.length} elements\n\n` +
+                        `${agentPage}\n\n` +
+                        `Interface updated at window.__AGENT_PAGE__`,
+                },
+              ],
+            };
           }
         }
-        // Re-throw if it's not a context destroyed error or no navigation detected
+        // Re-throw if it's not a context destroyed error
         throw error;
       }
 
@@ -1951,6 +1966,54 @@ export class SupapupServer {
               },
             ],
           };
+        }
+      }
+      
+      // Check if this is a navigation-related error
+      if (errorMessage.includes('Execution context was destroyed') || 
+          errorMessage.includes('context was destroyed')) {
+        // Try to handle navigation/AJAX case
+        try {
+          // Wait for potential navigation or AJAX to complete
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          const originalUrl = await this.page.url();
+          const navCheck = await NavigationMonitor.checkForNavigation(this.page, originalUrl);
+          
+          // Always try to reinject scripts after context destruction
+          const newManifest = await this.injectAgentPageScript();
+          if (newManifest) {
+            const agentPage = AgentPageGenerator.generateAgentPage(newManifest);
+            
+            if (navCheck.navigated) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `✅ Action executed: ${args.actionId}\n\n` +
+                          `🔄 Navigated to: ${navCheck.newUrl}\n\n` +
+                          `${agentPage}\n\n` +
+                          `Interface updated at window.__AGENT_PAGE__`,
+                  },
+                ],
+              };
+            } else {
+              // AJAX update case
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `✅ Action executed: ${args.actionId}\n\n` +
+                          `🔄 Page updated with ${newManifest.elements.length} elements\n\n` +
+                          `${agentPage}\n\n` +
+                          `Interface updated at window.__AGENT_PAGE__`,
+                  },
+                ],
+              };
+            }
+          }
+        } catch (navError) {
+          // If navigation check fails, fall through to regular error
         }
       }
       
@@ -3975,7 +4038,12 @@ export class SupapupServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    // console.error('Supapup MCP server running on stdio');
+    
+    // Output helpful context message to stderr (visible to users but not interfering with stdio protocol)
+    console.error('🤖 Supapup MCP server v0.1.11 started successfully');
+    console.error('📋 Available tools: browser_navigate, agent_execute_action, form_fill, agent_read_content, and more');
+    console.error('💡 Use natural language with your AI assistant to interact with web pages');
+    console.error('📚 Documentation: https://github.com/jaspergreen/supapup');
     
     // Handle process termination signals
     process.on('SIGINT', async () => {
