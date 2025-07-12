@@ -3736,7 +3736,13 @@ export class SupapupServer {
 }
 
 // Only run server if this is the main module
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check if this file is being run directly (handles symlinks too)
+const isMainModule = process.argv[1] && (
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith('/dist/index.js')
+);
+
+if (isMainModule) {
   const server = new SupapupServer();
   server.run().catch(console.error);
 }
