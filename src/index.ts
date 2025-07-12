@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -98,6 +100,12 @@ import { AgentPageScript } from './agent-page-script.js';
 import { StorageTools } from './storage-tools.js';
 import { WaitStateManager } from './wait-state-manager.js';
 import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Apply stealth plugin
 puppeteer.use(StealthPlugin());
@@ -1472,16 +1480,20 @@ export class SupapupServer {
       // First compile the browser agent generator
       let browserScript: string;
       try {
-        browserScript = fs.readFileSync('./dist/browser-agent-generator.js', 'utf8')
+        browserScript = fs.readFileSync(path.join(__dirname, 'browser-agent-generator.js'), 'utf8')
           .replace(/export function/g, 'function');
       } catch (e) {
-        // Fallback: inject the function directly
-        browserScript = fs.readFileSync('./src/browser-agent-generator.ts', 'utf8')
-          .replace(/export function/g, 'function')
-          .replace(/: Element/g, '')
-          .replace(/: string/g, '')
-          .replace(/: boolean/g, '')
-          .replace(/: number/g, '');
+        // In development, fallback to TypeScript file
+        try {
+          browserScript = fs.readFileSync(path.join(__dirname, '..', 'src', 'browser-agent-generator.ts'), 'utf8')
+            .replace(/export function/g, 'function')
+            .replace(/: Element/g, '')
+            .replace(/: string/g, '')
+            .replace(/: boolean/g, '')
+            .replace(/: number/g, '');
+        } catch (fallbackError) {
+          throw new Error('Failed to load browser agent generator script');
+        }
       }
       
       // Inject the function
@@ -2414,15 +2426,20 @@ export class SupapupServer {
       // Inject browser agent generator script
       let browserScript: string;
       try {
-        browserScript = fs.readFileSync('./dist/browser-agent-generator.js', 'utf8')
+        browserScript = fs.readFileSync(path.join(__dirname, 'browser-agent-generator.js'), 'utf8')
           .replace(/export function/g, 'function');
       } catch (e) {
-        browserScript = fs.readFileSync('./src/browser-agent-generator.ts', 'utf8')
-          .replace(/export function/g, 'function')
-          .replace(/: Element/g, '')
-          .replace(/: string/g, '')
-          .replace(/: boolean/g, '')
-          .replace(/: number/g, '');
+        // In development, fallback to TypeScript file
+        try {
+          browserScript = fs.readFileSync(path.join(__dirname, '..', 'src', 'browser-agent-generator.ts'), 'utf8')
+            .replace(/export function/g, 'function')
+            .replace(/: Element/g, '')
+            .replace(/: string/g, '')
+            .replace(/: boolean/g, '')
+            .replace(/: number/g, '');
+        } catch (fallbackError) {
+          throw new Error('Failed to load browser agent generator script');
+        }
       }
       
       await this.page.evaluate(browserScript);
