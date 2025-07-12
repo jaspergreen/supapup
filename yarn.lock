@@ -1777,6 +1777,18 @@ strip-ansi@^6.0.0, strip-ansi@^6.0.1:
   dependencies:
     ansi-regex "^5.0.1"
 
+"supapup@file:":
+  version "0.1.11"
+  resolved "file:"
+  dependencies:
+    "@modelcontextprotocol/sdk" "^1.0.0"
+    jsdom "^26.1.0"
+    node-html-markdown "^1.3.0"
+    puppeteer "^24.0.0"
+    puppeteer-extra "^3.3.6"
+    puppeteer-extra-plugin-stealth "^2.11.2"
+    supapup "file:"
+
 supports-color@^7.1.0:
   version "7.2.0"
   resolved "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz"
