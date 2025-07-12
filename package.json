@@ -1,6 +1,6 @@
 {
   "name": "supapup",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "⚡ Lightning-fast MCP browser dev tool. Navigate → Get instant structured data. No screenshots needed! Puppeteer: 📸 → CSS selectors → JS eval. Supapup: semantic IDs ready to use. 10x faster, 90% fewer tokens.",
   "keywords": [
     "mcp",
@@ -60,6 +60,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "jsdom": "^26.1.0",
+    "node-html-markdown": "^1.3.0",
     "puppeteer": "^24.0.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"

@@ -1,4 +1,4 @@
-# Supapup AI Agent Test Plan
+papup AI Agent Test Plan
 
 ## Overview
 This test plan is designed for AI agents to systematically test all 52 Supapup tools. The goal is to identify bugs, unclear interfaces, high cognitive load areas, and ensure the tool empowers AI coding assistants to perform web-based browser testing and debugging effectively.

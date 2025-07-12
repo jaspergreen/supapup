@@ -98,6 +98,7 @@ import { NavigationMonitor } from './navigation-monitor.js';
 import { DevToolsElements } from './devtools-elements.js';
 import { AgentPageScript } from './agent-page-script.js';
 import { StorageTools } from './storage-tools.js';
+import { ContentExtractor } from './content-extractor.js';
 import { WaitStateManager } from './wait-state-manager.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -567,6 +568,33 @@ export class SupapupServer {
             required: ['page'],
           },
         },
+        // Content Extraction tools
+        {
+          name: 'agent_read_content',
+          description: 'Extract readable page content in markdown format - perfect for reading articles, search results, or any page text. Supports pagination for large content.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              format: { 
+                type: 'string', 
+                description: 'Output format: "markdown" (default) or "text"',
+                enum: ['markdown', 'text']
+              },
+              page: {
+                type: 'number',
+                description: 'Page number for paginated content (1-based). Use when content is too long.'
+              },
+              pageSize: {
+                type: 'number',
+                description: 'Characters per page (default: 20000). Adjust for smaller/larger chunks.'
+              },
+              maxElements: {
+                type: 'number',
+                description: 'Max DOM elements to process per page (default: 100). Use for very large pages like Wikipedia.'
+              },
+            },
+          },
+        },
         // DevTools Elements tools
         {
           name: 'devtools_inspect_element',
@@ -847,6 +875,9 @@ export class SupapupServer {
           return await this.waitForChanges(request.params.arguments || {});
         case 'agent_get_page_chunk':
           return await this.getAgentPageChunk(request.params.arguments || {});
+        // Content Extraction tools
+        case 'agent_read_content':
+          return await this.readPageContent(request.params.arguments || {});
         // DevTools Elements tools
         case 'devtools_inspect_element':
           if (!this.devToolsElements) {
@@ -1528,6 +1559,7 @@ export class SupapupServer {
       
       // Create agent page text representation
       const agentPage = AgentPageGenerator.generateAgentPage(manifest);
+      const agentPageWithTools = AgentPageGenerator.appendToolsSummary(agentPage, this.getToolsSummary());
       
       // Inject the interaction handler (elements already have data-mcp attributes)
       await this.injectInteractionScript(manifest);
@@ -1597,7 +1629,7 @@ export class SupapupServer {
       
       let responseText = `✅ Navigation successful\n` +
                           `📍 URL: ${args.url}\n\n` +
-                          `${agentPage}\n\n` +
+                          `${agentPageWithTools}\n\n` +
                           `Interface available at window.__AGENT_PAGE__`;
 
       // Add pagination warning if needed
@@ -2728,6 +2760,164 @@ export class SupapupServer {
           {
             type: 'text',
             text: `❌ Error fetching page chunk: ${error?.message || error}`,
+          },
+        ],
+      };
+    }
+  }
+
+  /**
+   * Get available MCP tools summary for agent reference
+   */
+  private getToolsSummary(): string {
+    const toolCategories: { [key: string]: string[] } = {
+      'Browser Control': [],
+      'Agent Page': [],
+      'Content Reading': [],
+      'Forms': [],
+      'Screenshots': [],
+      'Debugging': [],
+      'Network': [],
+      'DevTools': [],
+      'Storage': [],
+      'Other': []
+    };
+
+    // Get tools from the tools array defined in the constructor
+    const toolsList = [
+      { name: 'browser_navigate', description: 'Navigate to a URL and generate agent page (auto-launches browser if needed)' },
+      { name: 'browser_close', description: 'Close the browser instance' },
+      { name: 'agent_execute_action', description: 'Execute an action on the agent page' },
+      { name: 'agent_get_page_state', description: 'Get the current state from the agent page' },
+      { name: 'agent_discover_actions', description: 'Get available actions from the agent page' },
+      { name: 'agent_generate_page', description: 'Generate agent page view of current webpage' },
+      { name: 'agent_remap_page', description: 'Re-scan and remap the current page after DOM changes' },
+      { name: 'agent_wait_for_changes', description: 'Wait for page changes and return new agent page' },
+      { name: 'agent_get_page_chunk', description: 'Get more elements when page has too many to show at once' },
+      { name: 'agent_read_content', description: 'Extract readable page content in markdown format - perfect for reading articles, search results, or any page text' },
+      { name: 'form_fill', description: 'Fill an entire form with JSON data' },
+      { name: 'form_detect', description: 'Detect all forms on the page and get JSON templates' },
+      { name: 'form_ask_human', description: 'Ask a human to visually identify an element by clicking on it' },
+      { name: 'screenshot_capture', description: 'Take a screenshot with advanced options' },
+      { name: 'screenshot_paginated', description: 'Take screenshots of a long page in segments' },
+      { name: 'screenshot_get_chunk', description: 'Get a specific chunk of a large screenshot' },
+      { name: 'debug_set_breakpoint', description: 'Set a breakpoint at a specific line in JavaScript code' },
+      { name: 'debug_continue', description: 'Resume execution after hitting a breakpoint' },
+      { name: 'debug_step_over', description: 'Step over the current line during debugging' },
+      { name: 'debug_evaluate', description: 'Evaluate expression in the current debug context' },
+      { name: 'network_get_console_logs', description: 'Get console logs from the page' },
+      { name: 'network_get_api_logs', description: 'Get detailed API request logs with headers and payload' },
+      { name: 'network_replay_request', description: 'Replay an API request with modified payload/headers' },
+      { name: 'devtools_inspect_element', description: 'Inspect an element using DevTools' },
+      { name: 'devtools_modify_css', description: 'Modify CSS properties of an element through DevTools' },
+      { name: 'devtools_highlight_element', description: 'Highlight an element on the page using DevTools' },
+      { name: 'storage_get', description: 'Get localStorage, sessionStorage, and cookies' },
+      { name: 'storage_set', description: 'Set a value in localStorage or sessionStorage' },
+    ];
+
+    toolsList.forEach((tool: { name: string; description: string }) => {
+      const name = tool.name;
+      const desc = tool.description;
+      
+      if (name.startsWith('browser_')) {
+        toolCategories['Browser Control'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('agent_')) {
+        if (name === 'agent_read_content') {
+          toolCategories['Content Reading'].push(`• ${name}: ${desc}`);
+        } else {
+          toolCategories['Agent Page'].push(`• ${name}: ${desc}`);
+        }
+      } else if (name.startsWith('form_')) {
+        toolCategories['Forms'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('screenshot_')) {
+        toolCategories['Screenshots'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('debug_') || name.includes('debug')) {
+        toolCategories['Debugging'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('network_') || name.includes('console') || name.includes('api')) {
+        toolCategories['Network'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('devtools_')) {
+        toolCategories['DevTools'].push(`• ${name}: ${desc}`);
+      } else if (name.startsWith('storage_')) {
+        toolCategories['Storage'].push(`• ${name}: ${desc}`);
+      } else {
+        toolCategories['Other'].push(`• ${name}: ${desc}`);
+      }
+    });
+
+    const lines: string[] = [];
+    lines.push('🛠️ AVAILABLE TOOLS:');
+    
+    Object.entries(toolCategories).forEach(([category, tools]) => {
+      if (tools.length > 0) {
+        lines.push(`  ${category}:`);
+        tools.forEach(tool => lines.push(`    ${tool}`));
+        lines.push('');
+      }
+    });
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Extract readable page content in markdown or text format
+   */
+  private async readPageContent(args: any): Promise<any> {
+    if (!this.page) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: '❌ No page loaded. Navigate to a page first.',
+          },
+        ],
+      };
+    }
+
+    try {
+      const { format = 'markdown', page, pageSize, maxElements } = args;
+      
+      // Get the current page HTML
+      const html = await this.page.content();
+      const url = await this.page.url();
+      
+      const options = { page, pageSize, maxElements };
+      let result;
+      
+      if (format === 'text') {
+        result = ContentExtractor.extractPlainText(html, options);
+      } else {
+        result = ContentExtractor.extractReadableContent(html, url, options);
+      }
+
+      let responseText = `📖 **Page Content** (${format})`;
+      
+      if (result.pagination) {
+        const { currentPage, totalPages, hasMore, totalElements, processedElements } = result.pagination;
+        responseText += ` - Page ${currentPage}/${totalPages}`;
+        if (totalElements) {
+          responseText += ` (${processedElements}/${totalElements} elements)`;
+        }
+        if (hasMore) {
+          responseText += ` (use page: ${currentPage + 1} for next)`;
+        }
+      }
+      
+      responseText += `\n\n${result.content}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseText,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Error extracting page content: ${error?.message || error}`,
           },
         ],
       };

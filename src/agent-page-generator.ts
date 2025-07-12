@@ -711,6 +711,13 @@ export class AgentPageGenerator {
   }
 
   /**
+   * Append tools summary to agent page
+   */
+  static appendToolsSummary(agentPage: string, toolsSummary: string): string {
+    return agentPage + '\n\n' + toolsSummary;
+  }
+
+  /**
    * Get element type and action (reuse from IDGenerator)
    */
   private static getElementTypeAndAction(element: Element): { type: string; action: string } {

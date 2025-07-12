@@ -229,6 +229,12 @@ gemini "Use Supapup to navigate to example.com and find all forms"
 - `inspect_element` - Get detailed element properties
 - `evaluate_script` - Execute JavaScript in page context
 
+### Content Reading
+- `agent_read_content` - Extract readable page content in markdown format for articles, search results, or any page text
+  - Supports pagination for large content (Wikipedia, long articles)
+  - Professional HTML-to-markdown conversion
+  - Handles pages with thousands of elements efficiently
+
 ## 📚 Examples
 
 ### Testing a Website
@@ -269,6 +275,16 @@ claude "Show me all the forms on https://example.com and tell me which fields ar
 claude "Check the performance metrics for https://mysite.com and tell me what's making it load slowly"
 
 claude "Test https://heavysite.com and identify which resources are taking the longest to load"
+```
+
+### Content Reading
+
+```bash
+claude "Read the Wikipedia article at https://en.wikipedia.org/wiki/Python_(programming_language) and summarize the key points"
+
+claude "Extract the main content from https://news.ycombinator.com and tell me what the top stories are about"
+
+claude "Go to https://docs.python.org/3/tutorial/ and read through the first few sections to help me understand Python basics"
 ```
 
 ### Automated Testing
