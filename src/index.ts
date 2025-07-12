@@ -595,6 +595,25 @@ export class SupapupServer {
             },
           },
         },
+        // Network throttling tool
+        {
+          name: 'network_throttle',
+          description: 'Control network speed to simulate slow connections (useful for testing long AJAX calls)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              preset: { 
+                type: 'string', 
+                description: 'Network preset: "slow-3g", "fast-3g", "offline", "no-throttling"',
+                enum: ['slow-3g', 'fast-3g', 'offline', 'no-throttling']
+              },
+              downloadThroughput: { type: 'number', description: 'Download speed in bytes/second (custom)' },
+              uploadThroughput: { type: 'number', description: 'Upload speed in bytes/second (custom)' },
+              latency: { type: 'number', description: 'Network latency in milliseconds (custom)' }
+            },
+            required: ['preset'],
+          },
+        },
         // DevTools Elements tools
         {
           name: 'devtools_inspect_element',
@@ -878,6 +897,9 @@ export class SupapupServer {
         // Content Extraction tools
         case 'agent_read_content':
           return await this.readPageContent(request.params.arguments || {});
+        // Network throttling
+        case 'network_throttle':
+          return await this.setNetworkThrottling(request.params.arguments || {});
         // DevTools Elements tools
         case 'devtools_inspect_element':
           if (!this.devToolsElements) {
@@ -1769,25 +1791,52 @@ export class SupapupServer {
       }
 
       if (shouldWait) {
-        // Wait a bit for mutations to occur
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Smart wait: poll for mutations or navigation with timeout
+        const maxWaitTime = 30000; // 30 seconds max
+        const pollInterval = 100; // Check every 100ms
+        const settleTime = 500; // Wait 500ms after last mutation
+        const startTime = Date.now();
         
-        // Check for navigation/redirect FIRST
-        const navCheck = await NavigationMonitor.checkForNavigation(this.page, originalUrl);
-        
+        let lastMutationTime = 0;
         let changed = false;
-        if (!navCheck.navigated) {
-          // Check if mutations were detected
+        let navCheck: any = { navigated: false };
+        
+        // Poll for changes
+        while (Date.now() - startTime < maxWaitTime) {
+          // Check for navigation
+          navCheck = await NavigationMonitor.checkForNavigation(this.page, originalUrl);
+          if (navCheck.navigated) {
+            break;
+          }
+          
+          // Check for mutations
           const mutationsDetected = await this.page.evaluate(() => {
             const detected = (window as any).__MUTATION_DETECTED__;
-            return detected;
+            if (detected) {
+              // Reset the flag so we can detect new mutations
+              (window as any).__MUTATION_DETECTED__ = false;
+              return true;
+            }
+            return false;
           });
           
           if (mutationsDetected) {
-            // Wait for DOM to settle after mutations
-            await new Promise(resolve => setTimeout(resolve, 500));
             changed = true;
+            lastMutationTime = Date.now();
           }
+          
+          // If mutations were detected, wait for them to settle
+          if (lastMutationTime > 0 && Date.now() - lastMutationTime > settleTime) {
+            // DOM has settled after mutations
+            break;
+          }
+          
+          // If no activity for 2 seconds, assume done
+          if (!changed && Date.now() - startTime > 2000) {
+            break;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
         
         if (navCheck.navigated) {
@@ -2871,6 +2920,7 @@ export class SupapupServer {
       { name: 'network_get_console_logs', description: 'Get console logs from the page' },
       { name: 'network_get_api_logs', description: 'Get detailed API request logs with headers and payload' },
       { name: 'network_replay_request', description: 'Replay an API request with modified payload/headers' },
+      { name: 'network_throttle', description: 'Control network speed to simulate slow connections' },
       { name: 'devtools_inspect_element', description: 'Inspect an element using DevTools' },
       { name: 'devtools_modify_css', description: 'Modify CSS properties of an element through DevTools' },
       { name: 'devtools_highlight_element', description: 'Highlight an element on the page using DevTools' },
@@ -2924,6 +2974,91 @@ export class SupapupServer {
   /**
    * Extract readable page content in markdown or text format
    */
+  private async setNetworkThrottling(args: any): Promise<any> {
+    if (!this.page) {
+      return {
+        content: [{ type: 'text', text: '❌ No page loaded. Please navigate to a page first.' }],
+      };
+    }
+
+    try {
+      const { preset, downloadThroughput, uploadThroughput, latency } = args;
+      
+      // Network throttling presets
+      const presets: Record<string, any> = {
+        'slow-3g': {
+          offline: false,
+          downloadThroughput: 50000, // 50KB/s
+          uploadThroughput: 20000,   // 20KB/s
+          latency: 2000              // 2 seconds
+        },
+        'fast-3g': {
+          offline: false,
+          downloadThroughput: 150000, // 150KB/s
+          uploadThroughput: 75000,    // 75KB/s
+          latency: 560               // 560ms
+        },
+        'offline': {
+          offline: true,
+          downloadThroughput: 0,
+          uploadThroughput: 0,
+          latency: 0
+        },
+        'no-throttling': {
+          offline: false,
+          downloadThroughput: 0, // 0 means no limit
+          uploadThroughput: 0,   // 0 means no limit
+          latency: 0
+        }
+      };
+
+      let config;
+      if (preset && presets[preset]) {
+        config = presets[preset];
+      } else {
+        // Custom configuration
+        config = {
+          offline: false,
+          downloadThroughput: downloadThroughput || 0,
+          uploadThroughput: uploadThroughput || 0,
+          latency: latency || 0
+        };
+      }
+
+      // Apply network conditions using CDP
+      const cdp = await this.page.target().createCDPSession();
+      await cdp.send('Network.enable');
+      await cdp.send('Network.emulateNetworkConditions', config);
+      await cdp.detach();
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🌐 Network throttling applied\n\n` +
+                  `📊 Configuration:\n` +
+                  `  • Preset: ${preset || 'custom'}\n` +
+                  `  • Download: ${config.downloadThroughput === 0 ? 'unlimited' : `${(config.downloadThroughput / 1000).toFixed(1)} KB/s`}\n` +
+                  `  • Upload: ${config.uploadThroughput === 0 ? 'unlimited' : `${(config.uploadThroughput / 1000).toFixed(1)} KB/s`}\n` +
+                  `  • Latency: ${config.latency}ms\n` +
+                  `  • Offline: ${config.offline ? 'Yes' : 'No'}\n\n` +
+                  `💡 Network conditions will apply to all future requests until changed.`
+          }
+        ],
+      };
+
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to set network throttling: ${error.message}`
+          }
+        ],
+      };
+    }
+  }
+
   private async readPageContent(args: any): Promise<any> {
     if (!this.page) {
       return {
@@ -4039,11 +4174,8 @@ export class SupapupServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     
-    // Output helpful context message to stderr (visible to users but not interfering with stdio protocol)
-    console.error('🤖 Supapup MCP server v0.1.11 started successfully');
-    console.error('📋 Available tools: browser_navigate, agent_execute_action, form_fill, agent_read_content, and more');
-    console.error('💡 Use natural language with your AI assistant to interact with web pages');
-    console.error('📚 Documentation: https://github.com/jaspergreen/supapup');
+    // MCP servers should not output to stderr during normal operation
+    // as it can be interpreted as errors by MCP clients
     
     // Handle process termination signals
     process.on('SIGINT', async () => {
