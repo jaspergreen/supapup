@@ -108,7 +108,7 @@ export class ElementDetector {
         // console.error(`[ElementDetector] Selector "${selector}" found ${found.length} elements`);
         elements.push(...Array.from(found));
       } catch (e) {
-        console.warn(`Invalid selector: ${selector}`, e);
+        // console.warn(`Invalid selector: ${selector}`, e);
       }
     });
 

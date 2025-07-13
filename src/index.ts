@@ -37,7 +37,7 @@ process.on('warning', (warning) => {
   }
   
   // For other warnings, output them
-  console.warn(warning);
+  // console.warn(warning);
 });
 
 // Also override emitWarning to catch it at the source

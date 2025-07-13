@@ -324,7 +324,7 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
   const allElements = Array.from(document.querySelectorAll(INTERACTIVE_SELECTORS.join(',')))
     .filter(el => isVisible(el));
 
-  console.log(`[Browser] Found ${allElements.length} total interactive elements`);
+  // console.log(`[Browser] Found ${allElements.length} total interactive elements`);
 
   // Apply pagination
   const totalElements = allElements.length;
@@ -332,7 +332,7 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
   const elements = allElements.slice(START_INDEX, endIndex);
   const hasMore = endIndex < totalElements;
 
-  console.log(`[Browser] Processing elements ${START_INDEX} to ${endIndex} of ${totalElements}`);
+  // console.log(`[Browser] Processing elements ${START_INDEX} to ${endIndex} of ${totalElements}`);
 
   // Tag elements and build manifest
   const manifestElements = elements.map((element, index) => {
@@ -357,7 +357,7 @@ export function generateAgentPageInBrowser(options?: { maxElements?: number; sta
 
   // Count tagged elements for verification
   const taggedCount = document.querySelectorAll('[data-mcp-id]').length;
-  console.log(`[Browser] Successfully tagged ${taggedCount} elements`);
+  // console.log(`[Browser] Successfully tagged ${taggedCount} elements`);
 
   // Group elements into forms
   function groupElementsIntoForms(manifestElements: any[], domElements: Element[]): any[] {

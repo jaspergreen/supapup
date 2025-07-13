@@ -9,7 +9,7 @@ export class DevToolsElements {
   async initialize(page: Page, client: CDPSession) {
     this.page = page;
     this.client = client;
-    console.log('[DevToolsElements] Initialized');
+    // console.log('[DevToolsElements] Initialized');
   }
 
   isInitialized(): boolean {
@@ -648,14 +648,14 @@ export class DevToolsElements {
         const browser = this.page.browser();
         const newPage = await browser.newPage();
         await newPage.goto(`data:image/png;base64,${screenshot}`);
-        console.log('[Visual Element Map] Opened screenshot in new tab');
+        // console.log('[Visual Element Map] Opened screenshot in new tab');
         
         // Wait 2 seconds to show screenshot, then switch back to original tab
         setTimeout(async () => {
           try {
             if (this.page) {
               await this.page.bringToFront();
-              console.log('[Visual Element Map] Switched back to original tab');
+              // console.log('[Visual Element Map] Switched back to original tab');
             }
           } catch (error) {
             // console.error('[Visual Element Map] Failed to switch back to original tab:', error);

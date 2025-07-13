@@ -126,7 +126,7 @@ export class WaitStateManager {
     await this.cleanup(page);
 
     if (this.isWaiting) {
-      console.warn('[WaitStateManager] Already waiting, cleaning up previous state...');
+      // console.warn('[WaitStateManager] Already waiting, cleaning up previous state...');
       await this.cleanup(page);
     }
 

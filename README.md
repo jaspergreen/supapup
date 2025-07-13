@@ -96,6 +96,7 @@ Supapup is an intelligent web automation tool that bridges the gap between AI ag
 - **Request/Response Logging**: Capture all network traffic with headers and payloads
 - **API Request Replay**: Replay requests with modified parameters
 - **Request Interception**: Modify requests on-the-fly with custom rules
+- **Network Throttling**: Simulate slow connections (slow-3g, fast-3g, offline) for testing
 - **Performance Metrics**: Track page load times and resource usage
 
 ### 🎯 Smart Navigation
@@ -222,6 +223,7 @@ gemini "Use Supapup to navigate to example.com and find all forms"
 - `get_api_logs` - Get detailed API request/response logs
 - `replay_api_request` - Replay requests with modifications
 - `intercept_requests` - Set up request interception rules
+- `network_throttle` - Control network speed to simulate slow connections (slow-3g, fast-3g, offline, no-throttling)
 
 ### Page Analysis
 - `get_performance_metrics` - Get page load and runtime metrics
@@ -275,6 +277,8 @@ claude "Show me all the forms on https://example.com and tell me which fields ar
 claude "Check the performance metrics for https://mysite.com and tell me what's making it load slowly"
 
 claude "Test https://heavysite.com and identify which resources are taking the longest to load"
+
+claude "Set network throttling to slow-3g and test how https://myapp.com performs on a slow connection"
 ```
 
 ### Content Reading

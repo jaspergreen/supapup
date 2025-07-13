@@ -37,7 +37,7 @@ export class ContentExtractor {
     try {
       const { maxLength = 50000, page, pageSize = 20000, maxElements = 100 } = options;
       
-      console.log(`[ContentExtractor] Processing HTML (length: ${html.length})`);
+      // console.log(`[ContentExtractor] Processing HTML (length: ${html.length})`);
       
       const dom = new JSDOM(html);
       const document = dom.window.document;
@@ -46,7 +46,7 @@ export class ContentExtractor {
       const mainContent = this.findMainContent(document);
       
       if (!mainContent) {
-        console.error('[ContentExtractor] Could not find main content area');
+        // console.error('[ContentExtractor] Could not find main content area');
         return { content: 'Error: Could not find main content area on page' };
       }
 
@@ -74,7 +74,7 @@ export class ContentExtractor {
 
       return { content: markdown };
     } catch (error: any) {
-      console.error('[ContentExtractor] Error:', error);
+      // console.error('[ContentExtractor] Error:', error);
       return { 
         content: `Error extracting content: ${error.message}. Try using chunked processing with page parameter.` 
       };
@@ -95,7 +95,7 @@ export class ContentExtractor {
           return text.length > 10; // Only elements with substantial text
         });
 
-      console.log(`[ContentExtractor] Found ${contentElements.length} content elements`);
+      // console.log(`[ContentExtractor] Found ${contentElements.length} content elements`);
       
       const totalPages = Math.ceil(contentElements.length / maxElements);
       
@@ -116,7 +116,7 @@ export class ContentExtractor {
       const endIndex = Math.min(startIndex + maxElements, contentElements.length);
       const pageElements = contentElements.slice(startIndex, endIndex);
 
-      console.log(`[ContentExtractor] Processing page ${page}: elements ${startIndex}-${endIndex} of ${contentElements.length}`);
+      // console.log(`[ContentExtractor] Processing page ${page}: elements ${startIndex}-${endIndex} of ${contentElements.length}`);
 
       // Create a temporary container with just this page's elements
       const tempContainer = container.ownerDocument.createElement('div');
@@ -143,7 +143,7 @@ export class ContentExtractor {
         }
       };
     } catch (error: any) {
-      console.error('[ContentExtractor] Chunked processing error:', error);
+      // console.error('[ContentExtractor] Chunked processing error:', error);
       return { 
         content: `Error in chunked processing: ${error.message}`,
         pagination: {
@@ -170,7 +170,7 @@ export class ContentExtractor {
 
       return markdown;
     } catch (error: any) {
-      console.error('[ContentExtractor] Markdown conversion error:', error);
+      // console.error('[ContentExtractor] Markdown conversion error:', error);
       // Fallback to plain text
       const tempDiv = new JSDOM(html).window.document.createElement('div');
       tempDiv.innerHTML = html;
@@ -216,15 +216,15 @@ export class ContentExtractor {
       try {
         const element = document.querySelector(selector);
         if (element && element.textContent && element.textContent.trim().length > 100) {
-          console.log(`[ContentExtractor] Using content selector: ${selector} (${element.textContent.length} chars)`);
+          // console.log(`[ContentExtractor] Using content selector: ${selector} (${element.textContent.length} chars`);
           return element;
         }
       } catch (e: any) {
-        console.log(`[ContentExtractor] Selector error for ${selector}: ${e.message}`);
+        // console.log(`[ContentExtractor] Selector error for ${selector}: ${e.message}`);
       }
     }
 
-    console.log('[ContentExtractor] No suitable content container found');
+    // console.log('[ContentExtractor] No suitable content container found');
     return null;
   }
 
@@ -339,7 +339,7 @@ export class ContentExtractor {
 
       return { content: text };
     } catch (error: any) {
-      console.error('[ContentExtractor] Plain text extraction error:', error);
+      // console.error('[ContentExtractor] Plain text extraction error:', error);
       return { content: 'Error extracting plain text from page' };
     }
   }
