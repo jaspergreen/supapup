@@ -1034,7 +1034,7 @@ export class SupapupServer {
 
       // Set up browser crash detection
       this.browser.on('disconnected', () => {
-        console.error('[Browser] Browser disconnected/crashed!');
+        // console.error('[Browser] Browser disconnected/crashed!');
         this.browser = null;
         this.page = null;
         // Clear all tool instances
@@ -1067,7 +1067,7 @@ export class SupapupServer {
       
       // Set up page crash detection
       const errorHandler = (error: Error) => {
-        console.error('[Page] Page crashed:', error);
+        // console.error('[Page] Page crashed:', error);
       };
       this.page.on('error', errorHandler);
       this.navigationListeners.set('error', errorHandler);
@@ -1078,7 +1078,7 @@ export class SupapupServer {
           const text = msg.text();
           // Detect memory-related errors
           if (text.includes('out of memory') || text.includes('Maximum call stack')) {
-            console.error('[Page] Memory exhaustion detected:', text);
+            // console.error('[Page] Memory exhaustion detected:', text);
           }
         }
       };
@@ -1092,14 +1092,14 @@ export class SupapupServer {
         
         // Log all navigation attempts for debugging
         if (request.isNavigationRequest()) {
-          console.error(`[Navigation] Attempting to navigate to: ${url}`);
+          // console.error(`[Navigation] Attempting to navigate to: ${url}`);
           
           // Block suspicious navigation patterns that might cause crashes
           if (url.includes('about:blank#blocked') || 
               url.includes('chrome-error://') ||
               url.includes('javascript:') ||
               (url === 'about:blank' && request.frame() !== this.page?.mainFrame())) {
-            console.error(`[Navigation] Blocked suspicious navigation: ${url}`);
+            // console.error(`[Navigation] Blocked suspicious navigation: ${url}`);
             request.abort();
             return;
           }
@@ -1256,7 +1256,7 @@ export class SupapupServer {
           
           // Enhanced dialog overrides
           window.alert = function(message) {
-            console.log('[MCP] Alert intercepted:', message);
+            // console.log('[MCP] Alert intercepted:', message);
             const alertNum = document.querySelectorAll('[data-mcp-type="alert"]').length + 1;
             const alertDiv = document.createElement('div');
             alertDiv.id = 'mcp-alert-' + Date.now();
@@ -1265,12 +1265,12 @@ export class SupapupServer {
             alertDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#ff4444;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:300px;';
             alertDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;">🚨 Alert #' + alertNum + '</div><div style="margin-bottom:10px;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.8;">Agent: Use click_alert(' + alertNum + ') to dismiss</div><button data-mcp-id="alert-ok" onclick="this.parentElement.remove();" style="background:white;color:#ff4444;border:none;padding:5px 10px;border-radius:3px;">OK</button>';
             document.body.appendChild(alertDiv);
-            console.log('[MCP] Alert helper: click_alert(' + alertNum + ')');
+            // console.log('[MCP] Alert helper: click_alert(' + alertNum + ')');
             return undefined;
           };
           
           window.prompt = function(message, defaultValue) {
-            console.log('[MCP] Prompt intercepted:', message);
+            // console.log('[MCP] Prompt intercepted:', message);
             const promptNum = document.querySelectorAll('[data-mcp-type="prompt"]').length + 1;
             const promptDiv = document.createElement('div');
             promptDiv.id = 'mcp-prompt-' + Date.now();
@@ -1279,12 +1279,12 @@ export class SupapupServer {
             promptDiv.style.cssText = 'position:fixed;top:20px;left:20px;background:#44ff44;color:black;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:350px;';
             promptDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;color:black;">📝 Prompt #' + promptNum + '</div><div style="margin-bottom:10px;color:black;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.7;color:black;">Agent: fill_prompt(' + promptNum + ', "text") then click_prompt(' + promptNum + ', true)</div><input type="text" data-mcp-id="prompt-input" value="' + (defaultValue || '') + '" style="width:250px;padding:5px;margin-bottom:10px;border:1px solid #ccc;border-radius:3px;"><br><button data-mcp-id="prompt-ok" onclick="this.parentElement.remove();" style="background:#44ff44;color:white;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="prompt-cancel" onclick="this.parentElement.remove();" style="background:#ff4444;color:white;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
             document.body.appendChild(promptDiv);
-            console.log('[MCP] Prompt helpers: fill_prompt(' + promptNum + ', "text"), click_prompt(' + promptNum + ', true/false)');
+            // console.log('[MCP] Prompt helpers: fill_prompt(' + promptNum + ', "text"), click_prompt(' + promptNum + ', true/false)');
             return null;
           };
           
           window.confirm = function(message) {
-            console.log('[MCP] Confirm intercepted:', message);
+            // console.log('[MCP] Confirm intercepted:', message);
             const confirmNum = document.querySelectorAll('[data-mcp-type="confirm"]').length + 1;
             const confirmDiv = document.createElement('div');
             confirmDiv.id = 'mcp-confirm-' + Date.now();
@@ -1293,11 +1293,11 @@ export class SupapupServer {
             confirmDiv.style.cssText = 'position:fixed;top:80px;right:20px;background:#4444ff;color:white;padding:15px;border-radius:5px;z-index:999999;box-shadow:0 4px 8px rgba(0,0,0,0.3);min-width:300px;';
             confirmDiv.innerHTML = '<div style="margin-bottom:10px;font-weight:bold;">❓ Confirm #' + confirmNum + '</div><div style="margin-bottom:10px;">' + message + '</div><div style="margin-bottom:10px;font-size:12px;opacity:0.8;">Agent: click_confirm(' + confirmNum + ', true) or click_confirm(' + confirmNum + ', false)</div><button data-mcp-id="confirm-ok" onclick="this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;margin-right:5px;">OK</button><button data-mcp-id="confirm-cancel" onclick="this.parentElement.remove();" style="background:white;color:#4444ff;border:none;padding:5px 10px;border-radius:3px;">Cancel</button>';
             document.body.appendChild(confirmDiv);
-            console.log('[MCP] Confirm helper: click_confirm(' + confirmNum + ', true/false)');
+            // console.log('[MCP] Confirm helper: click_confirm(' + confirmNum + ', true/false)');
             return false;
           };
           
-          console.log('[MCP] Enhanced dialog overrides with helper functions installed');
+          // console.log('[MCP] Enhanced dialog overrides with helper functions installed');
         })();
       });
 
@@ -1389,7 +1389,7 @@ export class SupapupServer {
           }
         };
         
-        console.log('[MCP] Agent page interface installed');
+        // console.log('[MCP] Agent page interface installed');
       });
       
       try {
@@ -3922,7 +3922,7 @@ export class SupapupServer {
           const originalPrompt = window.prompt;
           
           window.alert = function(message) {
-            console.log('[MCP] Alert intercepted:', message);
+            // console.log('[MCP] Alert intercepted:', message);
             const alertDiv = document.createElement('div');
             alertDiv.id = 'mcp-alert-' + Date.now();
             alertDiv.setAttribute('data-mcp-id', 'alert-dialog');
@@ -3934,7 +3934,7 @@ export class SupapupServer {
           };
           
           window.confirm = function(message) {
-            console.log('[MCP] Confirm intercepted:', message);
+            // console.log('[MCP] Confirm intercepted:', message);
             const confirmDiv = document.createElement('div');
             confirmDiv.id = 'mcp-confirm-' + Date.now();
             confirmDiv.setAttribute('data-mcp-id', 'confirm-dialog');
@@ -3946,7 +3946,7 @@ export class SupapupServer {
           };
           
           window.prompt = function(message, defaultValue) {
-            console.log('[MCP] Prompt intercepted:', message);
+            // console.log('[MCP] Prompt intercepted:', message);
             const promptDiv = document.createElement('div');
             promptDiv.id = 'mcp-prompt-' + Date.now();
             promptDiv.setAttribute('data-mcp-id', 'prompt-dialog');
@@ -3957,7 +3957,7 @@ export class SupapupServer {
             return null; // Default to null for non-blocking
           };
           
-          console.log('[MCP] Dialog overrides installed');
+          // console.log('[MCP] Dialog overrides installed');
         })();
         
         ${attributeScript}
@@ -4203,5 +4203,7 @@ const isMainModule = process.argv[1] && (
 
 if (isMainModule) {
   const server = new SupapupServer();
-  server.run().catch(console.error);
+  server.run().catch((error) => {
+    // console.error(error);
+  });
 }

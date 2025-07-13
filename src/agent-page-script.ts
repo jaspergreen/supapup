@@ -31,7 +31,7 @@ export class AgentPageScript {
             try {
               const found = document.querySelectorAll(selector);
               elements.push(...Array.from(found).slice(0, MAX_ELEMENTS - elements.length));
-            } catch (e) { console.warn('Invalid selector:', selector); }
+            } catch (e) { /* console.warn('Invalid selector:', selector); */ }
           }
 
           return Array.from(new Set(elements)).filter(el => this.isElementVisible(el)).slice(0, MAX_ELEMENTS);

@@ -64,7 +64,7 @@ export class HTMLParser {
             el.setAttribute('data-mcp-type', '${element.type}');
             el.setAttribute('data-mcp-action', '${element.action}');
           }
-        } catch (e) { console.warn('Failed to tag element ${element.id}'); }
+        } catch (e) { /* console.warn('Failed to tag element ${element.id}'); */ }
       `);
     });
 

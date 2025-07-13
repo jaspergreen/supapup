@@ -32,7 +32,7 @@ export class NetworkTools {
     this.page = page;
     this.setupNetworkMonitoring().catch((error) => {
       try {
-        console.error('[NetworkTools] Setup error:', error);
+        // console.error('[NetworkTools] Setup error:', error);
       } catch (e) {
         // Silently ignore EPIPE errors when stdio is closed
       }
@@ -41,7 +41,7 @@ export class NetworkTools {
 
   private safeLog(message: string) {
     try {
-      console.log(message);
+      // console.log(message);
     } catch (error) {
       // Silently ignore EPIPE errors when stdio is closed
     }
