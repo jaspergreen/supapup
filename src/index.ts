@@ -10,6 +10,7 @@ import puppeteer from 'puppeteer-extra';
 import { Browser, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { EventEmitter } from 'events';
+import { BrowserRecovery } from './browser-recovery.js';
 
 // Fix MaxListenersExceededWarning
 EventEmitter.defaultMaxListeners = 50;
@@ -174,6 +175,7 @@ export class SupapupServer {
   private cdpSession: any | null = null; // Store CDP session for reuse
   private waitStateManager: WaitStateManager;
   private navigationListeners: Map<string, Function> = new Map();
+  private browserRecovery: BrowserRecovery;
 
   constructor() {
     this.server = new Server(
@@ -189,6 +191,7 @@ export class SupapupServer {
     );
 
     this.waitStateManager = WaitStateManager.getInstance();
+    this.browserRecovery = new BrowserRecovery();
     this.setupHandlers();
   }
 
@@ -818,7 +821,69 @@ export class SupapupServer {
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      switch (request.params.name) {
+      try {
+        return await this.handleToolRequest(request);
+      } catch (error: any) {
+        // Check if it's a browser crash
+        if (this.isBrowserCrashError(error)) {
+          await this.handleBrowserCrash(error);
+          
+          // Return graceful error message
+          return {
+            content: [{
+              type: 'text',
+              text: `🔥 Browser crashed: ${error.message}\n\n` +
+                    `The browser has been cleaned up. You can:\n` +
+                    `• Try the operation again\n` +
+                    `• Use browser_navigate to start fresh\n\n` +
+                    `Crash info: ${this.browserRecovery.getCrashInfo().crashCount} crashes so far`
+            }]
+          };
+        }
+        
+        // Re-throw non-crash errors
+        throw error;
+      }
+    });
+  }
+
+  private isBrowserCrashError(error: any): boolean {
+    const crashIndicators = [
+      'Target closed',
+      'Session closed',
+      'Protocol error',
+      'Execution context was destroyed',
+      'Cannot find context',
+      'Navigating frame was detached',
+      'Target page, context or browser has been closed',
+      'Connection closed',
+      'WebSocket is not open',
+      'Runtime.callFunctionOn timed out',
+      'Runtime.evaluate timed out'
+    ];
+    
+    const errorMessage = error?.message || error?.toString() || '';
+    return crashIndicators.some(indicator => errorMessage.includes(indicator));
+  }
+
+  private async handleBrowserCrash(error: any): Promise<void> {
+    // Record the crash
+    this.browserRecovery.recordCrash(error.message || 'Unknown crash');
+    
+    // Clean up the crashed browser
+    await this.browserRecovery.cleanupCrashedBrowser(this.browser);
+    
+    // Reset our state
+    this.browser = null;
+    this.page = null;
+    this.cdpSession = null;
+    await this.cleanupTools();
+    this.browserRecovery.resetState();
+  }
+
+
+  private async handleToolRequest(request: any): Promise<any> {
+    switch (request.params.name) {
         case 'browser_navigate':
           return await this.navigate(request.params.arguments || {});
         case 'agent_execute_action':
@@ -1012,8 +1077,6 @@ export class SupapupServer {
         default:
           throw new Error(`Unknown tool: ${request.params.name}`);
       }
-    });
-
   }
 
   // Core browser management
@@ -1033,19 +1096,13 @@ export class SupapupServer {
       });
 
       // Set up browser crash detection
-      this.browser.on('disconnected', () => {
+      this.browser.on('disconnected', async () => {
         // console.error('[Browser] Browser disconnected/crashed!');
+        this.browserRecovery.recordCrash('Browser disconnected');
         this.browser = null;
         this.page = null;
-        // Clear all tool instances
-        this.devtools = null;
-        this.responsiveTester = null;
-        this.actionMonitor = null;
-        this.debuggingTools = null;
-        this.networkTools = null;
-        this.pageAnalysis = null;
-        this.devToolsElements = null;
-        this.storageTools = null;
+        this.cdpSession = null;
+        await this.cleanupTools();
       });
 
       // Get existing pages
@@ -1068,6 +1125,7 @@ export class SupapupServer {
       // Set up page crash detection
       const errorHandler = (error: Error) => {
         // console.error('[Page] Page crashed:', error);
+        this.browserRecovery.recordCrash(`Page crashed: ${error.message}`);
       };
       this.page.on('error', errorHandler);
       this.navigationListeners.set('error', errorHandler);

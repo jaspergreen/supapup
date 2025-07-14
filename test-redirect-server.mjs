@@ -34,6 +34,36 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(data);
     });
+  } else if (pathname === '/crash') {
+    fs.readFile(path.join(__dirname, 'test-force-crash.html'), (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  } else if (pathname === '/memory-crash') {
+    fs.readFile(path.join(__dirname, 'test-memory-crash.html'), (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  } else if (pathname === '/stack-crash') {
+    fs.readFile(path.join(__dirname, 'test-stack-crash.html'), (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
   } else {
     res.writeHead(404);
     res.end('Not found');
