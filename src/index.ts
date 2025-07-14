@@ -1171,7 +1171,9 @@ export class SupapupServer {
       
       // Track redirects to prevent infinite loops
       let redirectCount = 0;
-      const maxRedirects = 10;
+      // Increase redirect limit for local dev servers and SPAs
+      const isLocalhost = args.url.includes('localhost') || args.url.includes('127.0.0.1');
+      const maxRedirects = isLocalhost ? 30 : 15;
       const visitedUrls = new Set<string>();
       
       // Set up redirect tracking
@@ -1191,7 +1193,10 @@ export class SupapupServer {
           visitedUrls.add(url);
           
           if (redirectCount > maxRedirects) {
-            throw new Error(`Too many redirects (${redirectCount}). Possible infinite redirect attack.`);
+            const errorMsg = isLocalhost 
+              ? `Too many redirects (${redirectCount}). This often happens with authentication flows in SPAs. Try using agent_wait_for_changes instead of navigate after login.`
+              : `Too many redirects (${redirectCount}). Possible infinite redirect loop.`;
+            throw new Error(errorMsg);
           }
         }
       };
