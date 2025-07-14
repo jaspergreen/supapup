@@ -360,15 +360,7 @@ export class AgentTools {
 
       if (!hasScript) {
         console.log('💉 Injecting interaction script...');
-        // Simplified injection - would need actual script content
-        await this.page.evaluate(() => {
-          (window as any).__AGENT_PAGE__ = {
-            execute: function(actionId: string, params: any) {
-              console.log('Executing action:', actionId, params);
-              return { success: true, actionId, params };
-            }
-          };
-        });
+        await this.page.evaluate(AgentPageScript.generate());
       }
     } catch (error) {
       console.error('❌ Error injecting interaction script:', error);
@@ -386,14 +378,7 @@ export class AgentTools {
 
       if (!hasGenerator) {
         console.log('💉 Injecting agent page generator...');
-        // Simplified injection - would need actual script content
-        await this.page.evaluate(() => {
-          (window as any).__AGENT_PAGE_GENERATOR__ = {
-            generateManifest: function() {
-              return { actions: [], elements: [], forms: [] };
-            }
-          };
-        });
+        await this.page.evaluate(AgentPageScript.generate());
       }
     } catch (error) {
       console.error('❌ Error injecting agent page generator:', error);

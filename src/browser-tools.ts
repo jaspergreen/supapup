@@ -112,6 +112,9 @@ export class BrowserTools {
           return this.generateCaptchaResponse(finalUrl, botCheckResult);
         }
 
+        // Inject agent page script
+        await this.page.evaluate(AgentPageScript.generate());
+
         // Generate agent page
         const html = await this.page.evaluate(() => document.documentElement.outerHTML);
         const manifest = await this.generateAgentPageInBrowser();

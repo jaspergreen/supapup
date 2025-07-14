@@ -153,6 +153,12 @@ This design enables agents to interact with web pages efficiently without visual
 - Semantic context extraction from labels, placeholders, and nearby headings
 - Intelligent ID generation using context and form structure
 
+**React Form Compatibility**:
+- When filling form fields, Supapup automatically dispatches both `input` and `change` events
+- This ensures React-controlled components update their internal state properly
+- Without these events, React forms may show filled values but keep buttons disabled
+- The `execute_action` method handles this automatically for all fill operations
+
 **Debugging Integration**:
 - Uses Chrome DevTools Protocol for real debugging capabilities
 - Supports conditional breakpoints and expression evaluation
