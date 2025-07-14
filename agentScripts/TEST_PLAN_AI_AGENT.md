@@ -346,6 +346,81 @@ Input: {script: "document.title"}
 Expected: Page title returned
 ```
 
+### Phase 14: Browser Crash Recovery (5 tests)
+
+#### 14.1 Memory Exhaustion Test
+```
+Setup: Navigate to any page
+Test: Execute memory exhaustion script
+Input: {script: "let arr = []; while(true) { arr.push(new Array(1000000).fill('x'.repeat(100))); }"}
+Expected: 
+  - Browser crashes
+  - MCP server remains responsive
+  - Error message indicates browser crash
+  - Can navigate to new page after crash
+Cognitive Check: Is the crash recovery message clear about what happened?
+```
+
+#### 14.2 Infinite Redirect Test
+```
+Setup: Create local HTML with aggressive redirects
+Test: Navigate to page with instant redirects
+HTML: <script>window.location.href = window.location.href + '#' + Date.now();</script>
+Expected:
+  - Browser handles or crashes after redirect limit
+  - MCP server stays alive
+  - Clear error about too many redirects
+  - Suggestion to use agent_wait_for_changes for auth flows
+```
+
+#### 14.3 Stack Overflow Test
+```
+Test: Execute recursive function causing stack overflow
+Input: {script: "function recurse() { recurse(); } recurse();"}
+Expected:
+  - JavaScript error or browser crash
+  - MCP server continues functioning
+  - Can close and restart browser
+```
+
+#### 14.4 Force Close Test
+```
+Setup: Navigate to any page
+Test: Forcefully terminate browser process (kill -9)
+Expected:
+  - Browser disconnect detected
+  - MCP server remains operational
+  - Next navigation launches fresh browser
+  - Crash count available in error message
+```
+
+#### 14.5 Anti-Bot Detection Crash Test
+```
+Test: Navigate to site with aggressive bot detection (e.g., claude.ai)
+Expected:
+  - If browser becomes unresponsive/crashes
+  - MCP server survives
+  - Can browser_close and restart
+  - Clear messaging about bot detection
+Note: This test may vary based on site's current anti-bot measures
+```
+
+### Crash Recovery Validation
+```
+After any crash test:
+1. Verify MCP connection still active: /mcp should show Supapup connected
+2. Test basic navigation: browser_navigate to example.com
+3. Check crash info available
+4. Confirm no need to restart Claude
+
+Success Criteria:
+- [ ] MCP server never crashes when browser crashes
+- [ ] Error messages clearly indicate browser crash (not generic errors)
+- [ ] Recovery is automatic or requires only browser_close + navigate
+- [ ] Crash tracking provides useful diagnostics
+- [ ] No session state corruption after recovery
+```
+
 ## Final Integration Test
 
 ### Complete Workflow Test
@@ -368,6 +443,9 @@ Expected: Page title returned
 - [ ] Error messages are helpful for AI agents
 - [ ] Tool outputs are structured and parseable
 - [ ] Google search workflow completes successfully
+- [ ] Browser crash recovery works in all test scenarios
+- [ ] MCP server never requires restart after browser crashes
+- [ ] Crash error messages provide clear next steps
 
 ## Bug Report Template
 
