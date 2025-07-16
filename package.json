@@ -1,6 +1,6 @@
 {
   "name": "supapup",
-  "version": "0.1.16",
+  "version": "0.1.18",
   "description": "⚡ Lightning-fast MCP browser dev tool. Navigate → Get instant structured data. No screenshots needed! Puppeteer: 📸 → CSS selectors → JS eval. Supapup: semantic IDs ready to use. 10x faster, 90% fewer tokens.",
   "keywords": [
     "mcp",
@@ -23,12 +23,12 @@
   "bugs": {
     "url": "https://github.com/jaspergreen/supapup/issues"
   },
-  "main": "dist/index.js",
+  "main": "dist/core/index.js",
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
     }
   },
   "files": [
@@ -40,18 +40,18 @@
     "CLAUDE.md"
   ],
   "bin": {
-    "supapup": "dist/index.js",
-    "supapup-cli": "dist/cli.js"
+    "supapup": "dist/core/index.js",
+    "supapup-cli": "dist/core/cli.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "cli": "node dist/cli.js",
-    "supapup": "node dist/cli.js",
+    "dev": "tsx src/core/index.ts",
+    "start": "node dist/core/index.js",
+    "cli": "node dist/core/cli.js",
+    "supapup": "node dist/core/cli.js",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/postinstall.js || true",
