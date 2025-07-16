@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Element Test Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden-section { display: none; }
+        .section { margin-bottom: 2rem; padding: 1rem; border: 2px solid #e5e7eb; border-radius: 0.5rem; }
+        .element-group { margin-bottom: 1rem; padding: 0.5rem; background: #f9fafb; border-radius: 0.25rem; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">🧪 Comprehensive Actionable Elements Test</h1>
+        <p class="text-gray-600 mb-8">This page contains every type of actionable HTML element to test the DevTools Agent Page Generator.</p>
+        
+        <!-- SECTION 1: FORM ELEMENTS -->
+        <section class="section">
+            <h2 class="text-2xl font-semibold mb-4">📝 Form Elements</h2>
+            
+            <form id="comprehensiveForm" class="space-y-4">
+                <!-- Text Inputs -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Text Inputs</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="textInput" class="block text-sm font-medium mb-1">Text Input</label>
+                            <input type="text" id="textInput" name="textInput" placeholder="Enter text" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="emailInput" class="block text-sm font-medium mb-1">Email Input</label>
+                            <input type="email" id="emailInput" name="emailInput" placeholder="user@example.com" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="passwordInput" class="block text-sm font-medium mb-1">Password Input</label>
+                            <input type="password" id="passwordInput" name="passwordInput" placeholder="Password" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="telInput" class="block text-sm font-medium mb-1">Phone Input</label>
+                            <input type="tel" id="telInput" name="telInput" placeholder="+1 (555) 123-4567" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="urlInput" class="block text-sm font-medium mb-1">URL Input</label>
+                            <input type="url" id="urlInput" name="urlInput" placeholder="https://example.com" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="searchInput" class="block text-sm font-medium mb-1">Search Input</label>
+                            <input type="search" id="searchInput" name="searchInput" placeholder="Search..." 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Number & Date Inputs -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Number & Date Inputs</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label for="numberInput" class="block text-sm font-medium mb-1">Number Input</label>
+                            <input type="number" id="numberInput" name="numberInput" min="0" max="100" placeholder="42" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="dateInput" class="block text-sm font-medium mb-1">Date Input</label>
+                            <input type="date" id="dateInput" name="dateInput" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="timeInput" class="block text-sm font-medium mb-1">Time Input</label>
+                            <input type="time" id="timeInput" name="timeInput" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="datetimeInput" class="block text-sm font-medium mb-1">DateTime Local</label>
+                            <input type="datetime-local" id="datetimeInput" name="datetimeInput" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="monthInput" class="block text-sm font-medium mb-1">Month Input</label>
+                            <input type="month" id="monthInput" name="monthInput" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="weekInput" class="block text-sm font-medium mb-1">Week Input</label>
+                            <input type="week" id="weekInput" name="weekInput" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Range & Color -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Range & Color Inputs</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="rangeInput" class="block text-sm font-medium mb-1">Range Input (0-100)</label>
+                            <input type="range" id="rangeInput" name="rangeInput" min="0" max="100" value="50" 
+                                   class="w-full">
+                        </div>
+                        <div>
+                            <label for="colorInput" class="block text-sm font-medium mb-1">Color Input</label>
+                            <input type="color" id="colorInput" name="colorInput" value="#3b82f6" 
+                                   class="w-full h-10 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Input -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">File Input</h3>
+                    <div>
+                        <label for="fileInput" class="block text-sm font-medium mb-1">File Upload</label>
+                        <input type="file" id="fileInput" name="fileInput" multiple accept=".jpg,.png,.pdf" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+
+                <!-- Checkboxes - POORLY WRITTEN -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Checkboxes (Poorly Written)</h3>
+                    <div class="space-y-2">
+                        <!-- No ID, label not connected -->
+                        <div class="flex items-center">
+                            <input type="checkbox" name="interests" value="music" class="mr-2">
+                            <span>🎵 Music</span>
+                        </div>
+                        <!-- ID but no for attribute -->
+                        <div class="flex items-center">
+                            <input type="checkbox" id="sports-check" name="interests" value="sports" class="mr-2" checked>
+                            <label>⚽ Sports</label>
+                        </div>
+                        <!-- Wrapped in label but no explicit connection -->
+                        <label class="flex items-center">
+                            <input type="checkbox" name="interests" value="technology" class="mr-2">
+                            💻 Technology
+                        </label>
+                        <!-- Text separated from checkbox -->
+                        <div>
+                            <p>📚 Reading Books:</p>
+                            <input type="checkbox" name="interests" value="reading" class="ml-4">
+                        </div>
+                        <!-- Multiple checkboxes with same text -->
+                        <div>
+                            <span>Choose your preferences:</span>
+                            <div style="display: inline;">
+                                <input type="checkbox" name="pref1" value="a"> Option A
+                                <input type="checkbox" name="pref2" value="b"> Option B  
+                                <input type="checkbox" name="pref3" value="c"> Option C
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Radio Buttons - MESSY HTML -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Radio Buttons (Messy)</h3>
+                    <div class="space-y-2">
+                        <!-- No labels at all -->
+                        <div>
+                            Size options:
+                            <input type="radio" name="size" value="small" class="mr-1"> Small
+                            <input type="radio" name="size" value="medium" class="mr-1" checked> Medium  
+                            <input type="radio" name="size" value="large" class="mr-1"> Large
+                        </div>
+                        <!-- Different groups mixed together -->
+                        <div style="margin-top: 10px;">
+                            Priority:
+                            <br>
+                            <input type="radio" name="priority" value="low"> Low priority item
+                            <br>
+                            <input type="radio" name="priority" value="high" checked> High priority item
+                        </div>
+                        <!-- Terrible nesting -->
+                        <table>
+                            <tr>
+                                <td>Color preference:</td>
+                                <td>
+                                    <div>
+                                        <input type="radio" name="color" value="red">
+                                        <span style="color: red;">Red</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <input type="radio" name="color" value="blue">
+                                        <span style="color: blue;">Blue</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Select Elements -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Select Elements</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="selectSingle" class="block text-sm font-medium mb-1">Single Select</label>
+                            <select id="selectSingle" name="selectSingle" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <option value="">Choose an option</option>
+                                <option value="option1">🚀 Option 1</option>
+                                <option value="option2">🎯 Option 2</option>
+                                <option value="option3">⭐ Option 3</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="selectMultiple" class="block text-sm font-medium mb-1">Multiple Select</label>
+                            <select id="selectMultiple" name="selectMultiple" multiple size="4" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <option value="tag1">📱 Mobile</option>
+                                <option value="tag2">💻 Desktop</option>
+                                <option value="tag3">🖥️ Tablet</option>
+                                <option value="tag4">⌚ Watch</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Textarea -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Textarea</h3>
+                    <div>
+                        <label for="textareaInput" class="block text-sm font-medium mb-1">Comments</label>
+                        <textarea id="textareaInput" name="textareaInput" rows="4" 
+                                  placeholder="Enter your comments here..." 
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md resize-vertical"></textarea>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons - NO IDs -->
+                <div class="element-group">
+                    <h3 class="font-medium mb-2">Submit Buttons (No IDs)</h3>
+                    <div class="flex flex-wrap gap-4">
+                        <!-- Main submit button with no ID -->
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            🚀 Submit Form
+                        </button>
+                        <!-- Input submit with no ID -->
+                        <input type="submit" value="📤 Submit via Input" 
+                               class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 cursor-pointer">
+                        <!-- Reset button with no ID -->
+                        <button type="reset" class="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                            🔄 Reset Form
+                        </button>
+                        <!-- Generic button that submits -->
+                        <button type="button" onclick="document.getElementById('comprehensiveForm').submit()" 
+                                class="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
+                            💥 Custom Submit
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- SECTION 2: BUTTONS & LINKS -->
+        <section class="section">
+            <h2 class="text-2xl font-semibold mb-4">🔘 Buttons & Links</h2>
+            
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Button Types</h3>
+                <div class="flex flex-wrap gap-4">
+                    <button type="button" id="regularButton" class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
+                        🎯 Regular Button
+                    </button>
+                    <button type="button" id="disabledButton" disabled class="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed">
+                        🚫 Disabled Button
+                    </button>
+                    <button type="button" id="iconButton" class="p-2 bg-orange-600 text-white rounded-full hover:bg-orange-700">
+                        🎨
+                    </button>
+                </div>
+            </div>
+
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Links</h3>
+                <div class="space-y-2">
+                    <div>
+                        <a href="#section1" id="internalLink" class="text-blue-600 hover:text-blue-800 underline">
+                            🔗 Internal Link (to #section1)
+                        </a>
+                    </div>
+                    <div>
+                        <a href="https://example.com" id="externalLink" target="_blank" rel="noopener" 
+                           class="text-green-600 hover:text-green-800 underline">
+                            🌐 External Link (example.com)
+                        </a>
+                    </div>
+                    <div>
+                        <a href="mailto:test@example.com" id="mailtoLink" class="text-red-600 hover:text-red-800 underline">
+                            📧 Mailto Link
+                        </a>
+                    </div>
+                    <div>
+                        <a href="tel:+1234567890" id="telLink" class="text-yellow-600 hover:text-yellow-800 underline">
+                            📞 Phone Link
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: INTERACTIVE ELEMENTS -->
+        <section class="section">
+            <h2 class="text-2xl font-semibold mb-4">⚡ Interactive Elements</h2>
+            
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Details & Summary</h3>
+                <details id="detailsElement" class="border border-gray-300 rounded-md p-4">
+                    <summary class="cursor-pointer font-medium text-blue-600 hover:text-blue-800">
+                        🔍 Click to expand details
+                    </summary>
+                    <div class="mt-2 text-gray-600">
+                        This content is hidden until the summary is clicked. This tests the details/summary elements.
+                    </div>
+                </details>
+            </div>
+
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Elements with onclick</h3>
+                <div class="space-y-2">
+                    <div onclick="alert('Div clicked!')" 
+                         class="p-3 bg-yellow-100 border border-yellow-300 rounded-md cursor-pointer hover:bg-yellow-200">
+                        🖱️ Clickable Div (onclick)
+                    </div>
+                    <span onclick="alert('Span clicked!')" 
+                          class="inline-block p-2 bg-pink-100 border border-pink-300 rounded-md cursor-pointer hover:bg-pink-200">
+                        🎯 Clickable Span (onclick)
+                    </span>
+                </div>
+            </div>
+
+            <div class="element-group">
+                <h3 class="font-medium mb-2">ARIA Roles</h3>
+                <div class="space-y-2">
+                    <div role="button" tabindex="0" id="ariaButton" 
+                         class="p-3 bg-indigo-100 border border-indigo-300 rounded-md cursor-pointer hover:bg-indigo-200">
+                        🎭 Element with role="button"
+                    </div>
+                    <div role="link" tabindex="0" id="ariaLink" 
+                         class="p-3 bg-teal-100 border border-teal-300 rounded-md cursor-pointer hover:bg-teal-200">
+                        🔗 Element with role="link"
+                    </div>
+                </div>
+            </div>
+
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Contenteditable</h3>
+                <div contenteditable="true" id="editableDiv" 
+                     class="p-3 border border-gray-300 rounded-md bg-white min-h-20">
+                    📝 This div is contenteditable - you can edit this text directly!
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: HIDDEN ELEMENTS (should not appear in agent view) -->
+        <section class="hidden-section" id="hiddenSection">
+            <h2 class="text-2xl font-semibold mb-4">👻 Hidden Elements</h2>
+            <button id="hiddenButton" class="px-4 py-2 bg-red-600 text-white rounded-md">
+                This button should NOT appear in agent view
+            </button>
+            <input type="text" id="hiddenInput" placeholder="Hidden input field">
+        </section>
+
+        <!-- SECTION 5: NIGHTMARE HTML -->
+        <section class="section">
+            <h2 class="text-2xl font-semibold mb-4">💀 Nightmare HTML</h2>
+            
+            <!-- Absolutely terrible form structure -->
+            <div class="element-group">
+                <h3 class="font-medium mb-2">The Worst Form Ever</h3>
+                <form style="background: #f0f0f0; padding: 10px;">
+                    <table border="1" cellpadding="5">
+                        <tr>
+                            <td>
+                                First name:
+                                <input type="text">
+                            </td>
+                            <td rowspan="2">
+                                <textarea placeholder="Comments go here..." rows="3" cols="20"></textarea>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                Last name:
+                                <input type="text">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <div style="float: left;">
+                                    Email: <input type="email">
+                                </div>
+                                <div style="float: right;">
+                                    <input type="checkbox"> Subscribe
+                                    <input type="checkbox"> Terms
+                                    <button>Submit</button>
+                                </div>
+                                <div style="clear: both;"></div>
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </div>
+
+            <!-- Buttons with no context -->
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Mysterious Buttons</h3>
+                <div style="padding: 20px; border: 1px solid #ccc;">
+                    <button>A</button>
+                    <button>B</button>
+                    <button>C</button>
+                    <span style="margin-left: 20px;">
+                        <button type="button" onclick="alert('You clicked the mystery button!')">?</button>
+                    </span>
+                    <div style="margin-top: 10px;">
+                        <input type="button" value="Do Something">
+                        <input type="button" value="">
+                        <button type="button"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inputs scattered everywhere -->
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Scattered Inputs</h3>
+                <div>
+                    <p>Please fill out the information below:</p>
+                    <input type="text" placeholder="What is this for?">
+                    
+                    <div style="margin: 10px 0;">
+                        Some text here... <input type="number" min="1" max="10"> ...more text
+                    </div>
+                    
+                    <table>
+                        <tr>
+                            <td>Date:</td>
+                            <td><input type="date"></td>
+                            <td>Time:</td>
+                            <td><input type="time"></td>
+                        </tr>
+                    </table>
+                    
+                    <p>Choose file: <input type="file" accept=".pdf,.doc"></p>
+                    
+                    <div style="background: yellow; padding: 5px; margin: 5px 0;">
+                        Color: <input type="color" value="#ff0000">
+                        Range: <input type="range" min="0" max="100" value="25">
+                    </div>
+                </div>
+            </div>
+
+            <!-- The most confusing select elements -->
+            <div class="element-group">
+                <h3 class="font-medium mb-2">Confusing Selects</h3>
+                <div>
+                    Pick one:
+                    <select>
+                        <option></option>
+                        <option>Option 1</option>
+                        <option>Option 2</option>
+                    </select>
+                    
+                    <br><br>
+                    
+                    Or maybe this one:
+                    <select multiple size="2" style="width: 100px;">
+                        <option>A</option>
+                        <option>B</option>
+                        <option>C</option>
+                        <option>D</option>
+                    </select>
+                    
+                    <div style="margin-top: 15px;">
+                        <span>Countries:</span>
+                        <select style="margin-left: 10px;">
+                            <option value="">--Please choose an option--</option>
+                            <option value="us">United States</option>
+                            <option value="ca">Canada</option>
+                            <option value="uk">United Kingdom</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6: TOGGLE BUTTON -->
+        <section class="section">
+            <h2 class="text-2xl font-semibold mb-4">🔄 Toggle Visibility Test</h2>
+            <div class="space-y-4">
+                <button type="button" id="toggleButton" 
+                        class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    🔄 Toggle Hidden Section
+                </button>
+                <p class="text-sm text-gray-600">
+                    Click the button above to show/hide the hidden section. Test how the agent page updates.
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Form submission handler
+        document.getElementById('comprehensiveForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('🎉 Form submitted! (prevented for demo)');
+        });
+
+        // Button click handlers
+        document.getElementById('regularButton').addEventListener('click', function() {
+            alert('🎯 Regular button clicked!');
+        });
+
+        document.getElementById('ariaButton').addEventListener('click', function() {
+            alert('🎭 ARIA button clicked!');
+        });
+
+        document.getElementById('ariaLink').addEventListener('click', function() {
+            alert('🔗 ARIA link clicked!');
+        });
+
+        // Toggle hidden section
+        document.getElementById('toggleButton').addEventListener('click', function() {
+            const hiddenSection = document.getElementById('hiddenSection');
+            const isHidden = hiddenSection.classList.contains('hidden-section');
+            
+            if (isHidden) {
+                hiddenSection.classList.remove('hidden-section');
+                hiddenSection.style.display = 'block';
+                this.textContent = '🙈 Hide Section';
+            } else {
+                hiddenSection.classList.add('hidden-section');
+                hiddenSection.style.display = 'none';
+                this.textContent = '🔄 Toggle Hidden Section';
+            }
+        });
+
+        // Keyboard handlers for ARIA elements
+        document.getElementById('ariaButton').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+
+        document.getElementById('ariaLink').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+
+        console.log('📋 Comprehensive test page loaded with all actionable elements');
+    </script>
+</body>
+</html>

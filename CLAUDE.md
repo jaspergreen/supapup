@@ -30,6 +30,14 @@ npm run dev
 npm start
 ```
 
+## Pre-test Requirements
+
+1. Uninstall any existing Supapup version: `npm uninstall -g supapup`
+2. Build the latest version: `npm run build`
+3. Create package: `npm pack`
+4. Install fresh: `npm install -g ./supapup-[version].tgz`
+5. Verify MCP connection: Check `/mcp` shows Supapup as connected
+
 ## Core Concept: Web Pages for AI Agents
 
 Supapup creates a "web page for agents" - a structured, predictable interface that abstracts away DOM complexity. Instead of agents having to take screenshots, hunt for elements with brittle selectors, or deal with dynamic content, Supapup provides:
