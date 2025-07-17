@@ -188,11 +188,11 @@ export class SupapupServer {
     switch (toolName) {
       // Browser Tools
       case 'browser_navigate':
-        const result = await this.browserTools.navigate(args.url);
+        const result = await this.browserTools.navigate(args.url, args.visible);
         // Update all tools with new page and manifest
         const newPage = this.browserTools.getPage();
         if (newPage) {
-          this.agentTools.initialize(newPage, this.browserTools.getCurrentManifest());
+          this.agentTools.initialize(newPage, this.browserTools.getCurrentManifest(), this.browserTools);
           this.screenshotTools.initialize(newPage);
           
           // Update specialized tools with new page reference
@@ -210,6 +210,9 @@ export class SupapupServer {
       case 'browser_close':
         return await this.browserTools.closeBrowser();
 
+      case 'browser_set_visibility':
+        return await this.browserTools.setBrowserVisibility(args.visible, args.restart);
+
       case 'browser_open_in_tab':
         return await this.browserTools.openInTab(args.content, args.contentType, args.title);
 
@@ -221,7 +224,7 @@ export class SupapupServer {
         // Update tool references to new page
         const switchPage = this.browserTools.getPage();
         if (switchPage) {
-          this.agentTools.initialize(switchPage, this.browserTools.getCurrentManifest());
+          this.agentTools.initialize(switchPage, this.browserTools.getCurrentManifest(), this.browserTools);
         }
         const page = this.browserTools.getPage();
         if (page) {
@@ -253,6 +256,9 @@ export class SupapupServer {
       case 'agent_get_page_chunk':
         return await this.agentTools.getPageChunk(args.page, args.maxElements);
 
+      case 'get_agent_page_chunk':
+        return await this.agentTools.getAgentPageChunk(args.id, args.chunk);
+
       case 'agent_read_content':
         return await this.agentTools.readContent(args);
 
@@ -282,7 +288,42 @@ export class SupapupServer {
         // Update page reference before operation
         const currentPageForFill = this.browserTools.getPage();
         if (currentPageForFill) (this.formTools as any).page = currentPageForFill;
-        return await this.formTools.fillForm(args);
+        const fillResult = await this.formTools.fillForm(args);
+        
+        // Format the result for MCP response
+        let responseText = '';
+        if (fillResult.success) {
+          responseText = `✅ Form filled successfully!\n\n`;
+          if (fillResult.filled.length > 0) {
+            responseText += `📝 Fields filled (${fillResult.filled.length}):\n`;
+            fillResult.filled.forEach(field => {
+              responseText += `   • ${field}\n`;
+            });
+          }
+        } else {
+          responseText = `❌ Form fill failed\n\n`;
+        }
+        
+        if (fillResult.errors.length > 0) {
+          responseText += `\n❗ Errors:\n`;
+          fillResult.errors.forEach(error => {
+            responseText += `   • ${error}\n`;
+          });
+        }
+        
+        if (fillResult.warnings.length > 0) {
+          responseText += `\n⚠️  Warnings:\n`;
+          fillResult.warnings.forEach(warning => {
+            responseText += `   • ${warning}\n`;
+          });
+        }
+        
+        return {
+          content: [{
+            type: 'text',
+            text: responseText.trim()
+          }]
+        };
 
       case 'form_detect':
         if (!this.formTools) throw new Error('Form tools not initialized');
@@ -522,7 +563,7 @@ export class SupapupServer {
     this.browserTools.clearBrowserReferences();
     
     // Reset tool states
-    this.agentTools.initialize(null, null);
+    this.agentTools.initialize(null, null, null);
     this.screenshotTools.initialize(null);
     
     // Reset existing tools

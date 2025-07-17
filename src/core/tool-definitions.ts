@@ -9,6 +9,7 @@ export class ToolDefinitions {
           type: 'object',
           properties: {
             url: { type: 'string', description: 'URL to navigate to' },
+            visible: { type: 'boolean', description: 'Optional: set browser visibility for this session (true=visible, false=headless)' },
           },
           required: ['url'],
         },
@@ -17,6 +18,18 @@ export class ToolDefinitions {
         name: 'browser_close',
         description: 'Close the browser instance',
         inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'browser_set_visibility',
+        description: 'Control browser visibility (headless/visible mode). Requires browser restart to take effect.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            visible: { type: 'boolean', description: 'true to show browser window, false for headless mode' },
+            restart: { type: 'boolean', description: 'Whether to restart browser immediately (default: true)' },
+          },
+          required: ['visible'],
+        },
       },
       {
         name: 'browser_open_in_tab',
@@ -116,6 +129,18 @@ export class ToolDefinitions {
             maxElements: { type: 'number', description: 'Elements per batch (default: 150)' },
           },
           required: ['page'],
+        },
+      },
+      {
+        name: 'get_agent_page_chunk',
+        description: 'Retrieve a specific chunk of a large agent page that was automatically paginated',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Agent page chunk ID returned from navigation' },
+            chunk: { type: 'number', description: 'Chunk number to retrieve (1-based)' },
+          },
+          required: ['id', 'chunk'],
         },
       },
       {

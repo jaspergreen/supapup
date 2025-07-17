@@ -191,6 +191,18 @@ export class DebuggingTools {
   async debugStepOver() {
     try {
       if (!this.client) throw new Error('CDP session not initialized');
+      if (!this.pausedParams) {
+        throw new Error(
+          'Debugger is not currently paused at a breakpoint.\n' +
+          '\n' +
+          '📋 To use debug_step_over, you must first:\n' +
+          '1. Set a breakpoint using debug_set_breakpoint\n' +
+          '2. Trigger code execution that hits the breakpoint\n' +
+          '3. Or use debug_function to automate both steps\n' +
+          '\n' +
+          'Example: debug_function({lineNumber: 10})'
+        );
+      }
       await this.client.send('Debugger.stepOver');
 
       return {
@@ -209,6 +221,18 @@ export class DebuggingTools {
   async debugStepInto() {
     try {
       if (!this.client) throw new Error('CDP session not initialized');
+      if (!this.pausedParams) {
+        throw new Error(
+          'Debugger is not currently paused at a breakpoint.\n' +
+          '\n' +
+          '📋 To use debug_step_into, you must first:\n' +
+          '1. Set a breakpoint using debug_set_breakpoint\n' +
+          '2. Trigger code execution that hits the breakpoint\n' +
+          '3. Or use debug_function to automate both steps\n' +
+          '\n' +
+          'Example: debug_function({lineNumber: 10})'
+        );
+      }
       await this.client.send('Debugger.stepInto');
 
       return {
@@ -228,6 +252,21 @@ export class DebuggingTools {
     try {
       const { expression } = args;
       if (!this.client) throw new Error('CDP session not initialized');
+      if (!this.pausedParams) {
+        throw new Error(
+          'Debugger is not currently paused at a breakpoint.\n' +
+          '\n' +
+          '📋 To use debug_evaluate, you must first:\n' +
+          '1. Set a breakpoint using debug_set_breakpoint\n' +
+          '2. Trigger code execution that hits the breakpoint\n' +
+          '3. Or use debug_function to automate both steps\n' +
+          '\n' +
+          'Example: debug_function({lineNumber: 10})\n' +
+          '\n' +
+          '💡 If you just want to evaluate JavaScript without debugging,\n' +
+          'use page_evaluate_script instead.'
+        );
+      }
       
       const { result } = await this.client.send('Runtime.evaluate', {
         expression,
@@ -255,7 +294,19 @@ export class DebuggingTools {
   async debugGetVariables() {
     try {
       if (!this.pausedParams) {
-        throw new Error('Not currently paused in debugger');
+        throw new Error(
+          'Debugger is not currently paused at a breakpoint.\n' +
+          '\n' +
+          '📋 To use debug_get_variables, you must first:\n' +
+          '1. Set a breakpoint using debug_set_breakpoint\n' +
+          '2. Trigger code execution that hits the breakpoint\n' +
+          '3. Or use debug_function to automate both steps\n' +
+          '\n' +
+          'Example: debug_function({lineNumber: 10})\n' +
+          '\n' +
+          '💡 This tool shows local variables at the current breakpoint.\n' +
+          'For general page inspection, use devtools_inspect_element.'
+        );
       }
 
       if (!this.client) throw new Error('CDP session not initialized');

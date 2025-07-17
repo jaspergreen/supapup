@@ -20,7 +20,13 @@ This test plan is designed for AI agents to systematically test all 52 Supapup t
 
 ## Test Execution Plan
 
-### Phase 1: Browser Management (5 tools)
+**Note**: For optimal performance and minimal distraction, all tests after Phase 1 should be run in headless mode using:
+```
+browser_set_visibility({visible: false, restart: true})
+```
+Only Phase 1 and Phase 15 (Browser Visibility Control) require visible browser testing.
+
+### Phase 1: Browser Management (7 tools)
 
 #### 1.1 browser_navigate
 ```
@@ -29,31 +35,68 @@ Expected: Agent page view with structured elements
 Cognitive Check: Is the output format immediately understandable?
 ```
 
-#### 1.2 browser_list_tabs
+#### 1.2 browser_navigate with visibility control
 ```
-Prerequisite: Have browser open from 1.1
+Test: Navigate with explicit visibility setting
+Input: {url: "https://example.com", visible: false}
+Expected: Navigation successful, browser runs in headless mode
+Cognitive Check: Does the visible parameter work intuitively?
+```
+
+#### 1.3 browser_set_visibility
+```
+Test A: Switch to headless mode
+Input: {visible: false, restart: true}
+Expected: Clear confirmation of mode change and browser restart
+
+Test B: Switch to visible mode
+Input: {visible: true, restart: true}
+Expected: Clear confirmation of mode change and browser restart
+
+Test C: Change without restart
+Input: {visible: false, restart: false}
+Expected: Warning that restart is needed to apply changes
+
+Cognitive Check: Are the visibility changes clear and predictable?
+```
+
+#### 1.4 browser_list_tabs
+```
+Prerequisite: Have browser open from previous tests
 Test: List all open tabs
 Expected: Clear list with indices and URLs
 ```
 
-#### 1.3 browser_open_in_tab
+#### 1.5 browser_open_in_tab
 ```
 Test: Open HTML content "<h1>Test Page</h1>" in new tab
 Expected: Confirmation of tab opened
 ```
 
-#### 1.4 browser_switch_tab
+#### 1.6 browser_switch_tab
 ```
 Prerequisite: Multiple tabs from previous tests
 Test: Switch to tab index 0
 Expected: Confirmation with tab details
 ```
 
-#### 1.5 browser_close
+#### 1.7 browser_close
 ```
 Test: Close browser
 Expected: Clean shutdown confirmation
 Note: Re-launch for next phase
+```
+
+**Switch to Headless Mode for Remaining Tests:**
+```
+Before starting Phase 2, run:
+browser_set_visibility({visible: false, restart: true})
+
+This will:
+- Speed up test execution significantly
+- Reduce visual distractions
+- Allow tests to run in CI/automation environments
+- Demonstrate headless mode reliability
 ```
 
 ### Phase 2: Element Interaction (4 tools)
@@ -421,6 +464,105 @@ Success Criteria:
 - [ ] No session state corruption after recovery
 ```
 
+### Phase 15: Browser Visibility Control Comprehensive Test
+
+This phase specifically tests the new dynamic browser visibility features to ensure they work reliably across different scenarios.
+
+#### 15.1 Default Behavior Test
+```
+Test: Verify new default visible browser behavior
+Steps:
+1. Fresh start (close any existing browser)
+2. Navigate to https://example.com
+Expected: Browser window should be visible by default
+Cognitive Check: Is the visible browser the expected default behavior?
+```
+
+#### 15.2 Visibility Toggle Test
+```
+Test: Dynamic visibility switching during session
+Steps:
+1. Start with visible browser (navigate to any page)
+2. Switch to headless: browser_set_visibility({visible: false, restart: true})
+3. Navigate to new page to confirm headless mode
+4. Switch back to visible: browser_set_visibility({visible: true, restart: true})
+5. Navigate to confirm visible mode
+Expected: Each switch should work cleanly with clear feedback
+Cognitive Check: Is the switching process intuitive and reliable?
+```
+
+#### 15.3 Navigation with Visibility Override
+```
+Test: Using visible parameter in browser_navigate
+Steps:
+1. Navigate with explicit headless: browser_navigate({url: "https://google.com", visible: false})
+2. Verify headless operation
+3. Navigate with explicit visible: browser_navigate({url: "https://example.com", visible: true})
+4. Verify visible operation
+Expected: Each navigation should override current settings
+Cognitive Check: Does the visible parameter provide clear control?
+```
+
+#### 15.4 Performance Comparison Test
+```
+Test: Measure performance difference between modes
+Steps:
+1. Time navigation in visible mode: browser_navigate({url: "https://wikipedia.org", visible: true})
+2. Time navigation in headless mode: browser_navigate({url: "https://wikipedia.org", visible: false})
+3. Compare load times and responsiveness
+Expected: Headless should be noticeably faster
+Cognitive Check: Is the performance benefit clear and significant?
+```
+
+#### 15.5 Restart Control Test
+```
+Test: restart parameter behavior
+Steps:
+1. Navigate to any page (visible mode)
+2. Set headless without restart: browser_set_visibility({visible: false, restart: false})
+3. Verify warning message about restart needed
+4. Navigate to new page and confirm headless mode applied
+5. Set visible with restart: browser_set_visibility({visible: true, restart: true})
+6. Verify immediate restart and visible mode
+Expected: restart=false should defer changes, restart=true should apply immediately
+Cognitive Check: Is the restart control behavior clear and useful?
+```
+
+#### 15.6 State Persistence Test
+```
+Test: Visibility settings persistence across operations
+Steps:
+1. Set headless mode: browser_set_visibility({visible: false, restart: true})
+2. Navigate to multiple pages
+3. Perform various actions (form fills, clicks, etc.)
+4. Verify browser stays in headless mode throughout
+5. Switch to visible and repeat
+Expected: Settings should persist until explicitly changed
+Cognitive Check: Does the state tracking work reliably?
+```
+
+#### 15.7 Error Handling Test
+```
+Test: Edge cases and error conditions
+Steps:
+1. Try setting visibility while no browser is running
+2. Try invalid parameters
+3. Test with browser crashes during visibility changes
+Expected: Graceful error handling with helpful messages
+Cognitive Check: Are error messages helpful for troubleshooting?
+```
+
+### Browser Visibility Success Criteria
+- [ ] Default visible browser behavior works correctly
+- [ ] Dynamic visibility switching is reliable and fast
+- [ ] Navigation visibility override functions as expected
+- [ ] Performance improvement in headless mode is measurable
+- [ ] Restart control provides appropriate flexibility
+- [ ] Settings persist correctly across operations
+- [ ] Error handling is robust and informative
+- [ ] All visibility features integrate smoothly with existing tools
+- [ ] Agents can make intelligent visibility decisions based on context
+
 ## Final Integration Test
 
 ### Complete Workflow Test
@@ -437,7 +579,7 @@ Success Criteria:
    - Extract first result link
 
 ### Success Metrics
-- [ ] All 52 tools tested without critical errors
+- [ ] All 54 tools tested without critical errors (including 2 new browser visibility tools)
 - [ ] Cognitive load issues documented
 - [ ] Parameter naming is consistent and intuitive
 - [ ] Error messages are helpful for AI agents

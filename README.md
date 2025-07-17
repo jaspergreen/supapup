@@ -5,8 +5,13 @@
 </p>
 
 <p align="center">
+  <em>v0.1.25 - Now with improved screenshot handling, visual element mapping, and agent page chunking!</em>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
+  <a href="#configuration">Configuration</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#mcp-tools">MCP Tools</a> •
   <a href="#examples">Examples</a> •
@@ -66,7 +71,7 @@ Example: execute_action({actionId: "form-login-email", params: {value: "user@exa
 - ⚡ **10x faster** - Instant structured data vs screenshots + manual inspection
 - 💰 **90% fewer tokens** - Text-based output instead of images
 - 🎯 **Zero complexity** - Semantic IDs ready to use, no CSS selectors needed
-- 🔄 **Dynamic handling** - Automatically remaps after page changes
+- 🔄 **Automatic DOM Remapping** - After every action, Supapup automatically detects DOM changes and returns an updated agent page with fresh element IDs. No stale references!
 
 <div align="center">
 
@@ -86,6 +91,13 @@ Supapup is an intelligent web automation tool that bridges the gap between AI ag
 - **Automatic Element Detection**: Intelligently identifies interactive elements on any page
 - **Visual Element Mapping**: Number-based element identification for easy interaction
 - **Unique ID Generation**: Handles duplicate elements intelligently - multiple "Add to Cart" buttons get unique IDs with product context
+
+### 🔄 Automatic DOM Remapping (Key Feature!)
+- **Zero Manual Updates**: After every `execute_action`, Supapup automatically detects DOM changes
+- **Fresh Element IDs**: All elements are re-mapped with new `data-mcp-id` attributes
+- **Handles Dynamic Content**: Perfect for SPAs, AJAX updates, and reactive frameworks
+- **Updated Agent Page**: The response always includes the latest page state
+- **Example**: Fill a search box → autocomplete appears → new dropdown elements are automatically mapped and returned
 
 ### 🔍 Advanced Debugging
 - **JavaScript Breakpoints**: Set conditional breakpoints and step through code
@@ -168,6 +180,66 @@ cd supapup
 npm install
 npm run build
 ```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Supapup supports environment variables for configuration:
+
+- **`SUPAPUP_HEADLESS`** - Set to `'true'` for headless mode (default: `'false'` - shows browser window)
+- **`SUPAPUP_DEBUG_PORT`** - Chrome remote debugging port (default: `9222`)
+- **`SUPAPUP_DEVTOOLS`** - Set to `'true'` to open DevTools (default: `false`)
+
+### MCP Configuration Examples
+
+**For Visible Browser (Default):**
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "supapup"
+    }
+  }
+}
+```
+
+**For Headless Servers:**
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "supapup",
+      "env": {
+        "SUPAPUP_HEADLESS": "true"
+      }
+    }
+  }
+}
+```
+
+**Custom Debug Port:**
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "supapup",
+      "env": {
+        "SUPAPUP_DEBUG_PORT": "9333"
+      }
+    }
+  }
+}
+```
+
+### Headless Server Deployment
+
+Supapup works out-of-the-box on headless Linux servers thanks to bundled Chromium:
+
+- ✅ No manual Chrome installation required
+- ✅ No X11/display server needed
+- ✅ Automatic fallback to headless mode
+- ✅ Works in Docker containers
 
 ## 🚀 Quick Start
 
@@ -349,6 +421,33 @@ node test-agent-generator.js
 node test-complex-page.cjs
 node test-supapup-flow.cjs
 ```
+
+## 📋 Changelog
+
+### v0.1.25 (Latest)
+- **🖼️ Improved Screenshot Handling**
+  - Increased screenshot size limit from 8.8KB to 45KB for better usability
+  - Viewport screenshots now auto-chunk when too large instead of failing
+  - Added detailed logging to show exact screenshot sizes
+  - Better error messages with actionable suggestions
+
+- **🎯 Fixed Visual Element Mapping**
+  - Removed references to non-existent helper functions
+  - Integrated with existing agent page system using `data-mcp-id` attributes
+  - Provides correct MCP tool usage examples
+  - Visual element map now properly guides interaction with `execute_action()`
+
+- **📦 Agent Page Chunking**
+  - Implemented missing `get_agent_page_chunk` functionality
+  - Large pages (>20K tokens) now automatically chunk
+  - Wikipedia and other large sites now work without token limit errors
+  - Clear instructions provided for retrieving subsequent chunks
+
+- **🔧 Developer Experience**
+  - Form fill now provides success feedback with filled fields list
+  - Debugging tools show helpful setup instructions when not paused
+  - Browser visible by default (was headless) for better debugging
+  - Added browser visibility control via MCP tools
 
 ## 📄 License
 

@@ -30,6 +30,41 @@ npm run dev
 npm start
 ```
 
+## Environment Variables
+
+Supapup supports environment variables for configuration:
+
+- **SUPAPUP_HEADLESS** - Set to 'true' for headless mode (default: false - shows browser window)
+- **SUPAPUP_DEBUG_PORT** - Chrome remote debugging port (default: 9222)
+- **SUPAPUP_DEVTOOLS** - Set to 'true' to open DevTools (default: false)
+
+### MCP Configuration Examples
+
+**Visible Browser (Default):**
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "supapup"
+    }
+  }
+}
+```
+
+**Headless Server Deployment:**
+```json
+{
+  "mcpServers": {
+    "supapup": {
+      "command": "supapup",
+      "env": {
+        "SUPAPUP_HEADLESS": "true"
+      }
+    }
+  }
+}
+```
+
 ## Pre-test Requirements
 
 1. Uninstall any existing Supapup version: `npm uninstall -g supapup`
@@ -120,7 +155,7 @@ This design enables agents to interact with web pages efficiently without visual
 2. **Element Interaction**: execute_action, discover_actions, get_page_state, execute_and_wait
 3. **Form Handling**: fill_form, detect_forms - auto-discover forms and fill with JSON data
 4. **Human Interaction**: ask_human - request human to identify elements visually
-5. **Screenshots**: screenshot, screenshot_paginated, screenshot_chunk - handle large pages
+5. **Screenshots**: screenshot, screenshot_paginated, screenshot_get_chunk - handle large pages
 6. **Debugging**: set_breakpoint, remove_breakpoint, debug_continue, debug_step_over, debug_step_into, debug_evaluate, debug_get_variables, debug_function
 7. **Network Analysis**: get_network_logs, get_api_logs, replay_api_request, intercept_requests, clear_logs
 8. **Console Monitoring**: get_console_logs - capture console output
@@ -139,15 +174,36 @@ This design enables agents to interact with web pages efficiently without visual
 4. Inject interaction script → `injectInteractionScript()`
 5. Execute actions via `window.__AGENT_PAGE__.execute()`
 
-**Dynamic DOM Handling**:
-- After actions that trigger AJAX/DOM changes, Supapup automatically:
-  1. Checks for navigation/redirects immediately (including CAPTCHA pages)
-  2. If no navigation, waits for DOM mutations to settle
-  3. Re-maps all elements with new `data-mcp-id` attributes
-  4. Returns updated agent page to the caller
-- The agent receives the NEW agent page in the execute_action response
-- Manual remapping available via `remap_page` tool
-- Explicit waiting available via `wait_for_changes` tool
+**🔄 Automatic DOM Remapping (Key Feature)**:
+Supapup automatically handles dynamic web pages by remapping the DOM after every action. This is a critical feature that ensures agents always have up-to-date element IDs.
+
+- **How it works**:
+  1. When you call `execute_action`, Supapup executes the action
+  2. It automatically detects DOM changes (added/removed elements)
+  3. All elements are re-mapped with fresh `data-mcp-id` attributes
+  4. The NEW agent page is returned in the response
+  
+- **Example flow**:
+  ```
+  1. execute_action({actionId: "search-input", params: {value: "test"}})
+     ↓
+  2. Supapup fills the input AND detects DOM changes (e.g., autocomplete dropdown appears)
+     ↓
+  3. Response includes: "🔄 DOM changes detected (42 added, 10 removed)"
+     ↓
+  4. Response includes the UPDATED agent page with new element IDs
+  ```
+
+- **Benefits**:
+  - No need to manually call `remap_page` after actions
+  - Handles AJAX updates, dynamic content, and SPAs automatically
+  - Element IDs remain stable and predictable
+  - Reduces errors from stale element references
+
+- **Manual control** (when needed):
+  - `remap_page` tool for explicit remapping
+  - `wait_for_changes` tool for complex scenarios
+  - `execute_action` with `waitForChanges: false` to skip auto-remapping
 
 **Agent Workflow for Dynamic Pages**:
 1. `navigate` → receive initial agent page
@@ -202,11 +258,12 @@ This design enables agents to interact with web pages efficiently without visual
 - Replay requests with modified headers/payload
 - Intercept and modify requests with custom rules
 
-### Screenshot Chunking
-- Screenshots automatically chunked when they exceed token limits (8,800 base64 chars)
-- Use `screenshot_paginated` for explicit pagination control
-- Retrieve chunks with `screenshot_chunk` tool
-- Handles large pages gracefully without token errors
+### Screenshot Handling for Large Pages
+- When full page screenshots exceed token limits (45,000 base64 chars), they automatically switch to paginated capture
+- Use `screenshot_paginated` for explicit control over pagination
+- Each chunk is a complete, valid screenshot of a portion of the page
+- Retrieve individual segments with `screenshot_get_chunk` tool
+- For viewport screenshots that are too large, quality is automatically reduced
 
 ## Testing
 

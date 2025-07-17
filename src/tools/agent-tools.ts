@@ -4,19 +4,38 @@ import { DevToolsAgentPageGenerator } from './../generators/devtools-agent-page-
 import { ContentExtractor } from './../generators/content-extractor.js';
 import { NavigationMonitor } from './../monitors/navigation-monitor.js';
 import { PageSettleDetector } from './../core/page-settle-detector.js';
+import { randomUUID } from 'crypto';
+
+interface AgentPageChunk {
+  id: string;
+  totalChunks: number;
+  chunks: string[];
+  metadata: {
+    url: string;
+    title: string;
+    totalElements: number;
+    timestamp: Date;
+    elementRanges: Array<{ start: number; end: number }>;
+  };
+}
 
 export class AgentTools {
   private page: Page | null = null;
   private currentManifest: any = null;
   private screenshotChunkData: Map<string, any> | null = null;
+  private agentPageChunkData: Map<string, AgentPageChunk> = new Map();
+  private browserTools: any = null;
 
   constructor() {
   }
 
   // Initialize with page and manifest from BrowserTools
-  initialize(page: Page | null, manifest: any): void {
+  initialize(page: Page | null, manifest: any, browserTools?: any): void {
     this.page = page;
     this.currentManifest = manifest;
+    if (browserTools) {
+      this.browserTools = browserTools;
+    }
   }
 
   async executeAction(actionId: string, params: any = {}): Promise<any> {
@@ -417,6 +436,63 @@ export class AgentTools {
     }
   }
 
+  async getAgentPageChunk(id: string, chunk: number): Promise<any> {
+    try {
+      // Try local chunk data first
+      let chunkData = this.agentPageChunkData.get(id);
+      
+      // If not found locally, check BrowserTools
+      if (!chunkData && this.browserTools) {
+        const browserChunks = this.browserTools.getAgentPageChunkData();
+        chunkData = browserChunks.get(id);
+      }
+      
+      if (!chunkData) {
+        throw new Error(`Agent page chunk ID not found: ${id}`);
+      }
+
+      if (chunk < 1 || chunk > chunkData.totalChunks) {
+        throw new Error(`Invalid chunk number: ${chunk}. Available chunks: 1-${chunkData.totalChunks}`);
+      }
+
+      const pageContent = chunkData.chunks[chunk - 1];
+      
+      // Validate chunk data before returning
+      if (!pageContent || pageContent.length === 0) {
+        throw new Error(`Agent page chunk ${chunk} is empty or invalid. This may be due to a chunking error.`);
+      }
+      
+      // Get element range for this chunk
+      const elementRange = chunkData.metadata.elementRanges[chunk - 1];
+      const elementsInChunk = elementRange ? (elementRange.end - elementRange.start + 1) : 0;
+      
+      // Navigation instructions
+      const prevChunk = Math.max(1, chunk - 1);
+      const nextChunk = Math.min(chunkData.totalChunks, chunk + 1);
+      const navigationText = chunk === 1 ? 
+        `\n⏭️ Next: get_agent_page_chunk({id: "${id}", chunk: ${nextChunk}})` :
+        chunk === chunkData.totalChunks ?
+        `\n⏮️ Previous: get_agent_page_chunk({id: "${id}", chunk: ${prevChunk}})` :
+        `\n⏮️ Previous: get_agent_page_chunk({id: "${id}", chunk: ${prevChunk}})\n⏭️ Next: get_agent_page_chunk({id: "${id}", chunk: ${nextChunk}})`;
+
+      let response = `📄 Agent Page Chunk ${chunk} of ${chunkData.totalChunks}\n`;
+      response += `📍 URL: ${chunkData.metadata.url}\n`;
+      response += `📊 Elements in this chunk: ${elementsInChunk}\n`;
+      response += `📋 Chunk ID: ${id}${navigationText}\n\n`;
+      response += pageContent;
+
+      return {
+        content: [{ type: 'text', text: response }]
+      };
+
+    } catch (error: any) {
+      console.error('❌ Error getting agent page chunk:', error);
+      return {
+        content: [{ type: 'text', text: `❌ Error getting agent page chunk: ${error.message}` }]
+      };
+    }
+  }
+
   // Private helper methods
   private async ensureInteractionScript(): Promise<void> {
     try {
@@ -452,6 +528,41 @@ export class AgentTools {
         content: result.content
       };
       
+      // Check if content needs to be chunked (20k chars is roughly 5k tokens)
+      const TOKEN_LIMIT = 20000; // Conservative limit for agent pages
+      if (result.content.length > TOKEN_LIMIT) {
+        console.log(`📦 Agent page too large (${result.content.length} chars), creating chunks...`);
+        
+        // Create chunks based on logical sections
+        const chunks = this.chunkAgentPage(result.content, result.elements);
+        
+        // Store chunked data
+        const chunkId = randomUUID();
+        this.agentPageChunkData.set(chunkId, {
+          id: chunkId,
+          totalChunks: chunks.length,
+          chunks: chunks.map(c => c.content),
+          metadata: {
+            url: result.url,
+            title: result.title,
+            totalElements: result.elements.length,
+            timestamp: new Date(),
+            elementRanges: chunks.map(c => ({ start: c.startElement, end: c.endElement }))
+          }
+        });
+        
+        // Return first chunk with instructions
+        const url = await this.page.url();
+        let response = `✅ Navigation successful\n📍 URL: ${url}\n\n`;
+        response += `⚠️ Large page detected (${result.content.length} characters)\n`;
+        response += `📦 Content split into ${chunks.length} chunks\n`;
+        response += `📋 Chunk ID: ${chunkId}\n`;
+        response += `🔍 Use get_agent_page_chunk({id: "${chunkId}", chunk: 2}) for next chunk\n\n`;
+        response += chunks[0].content;
+        
+        return response;
+      }
+      
       // Return the complete agent page with navigation header
       const url = await this.page.url();
       return `✅ Navigation successful\n📍 URL: ${url}\n\n${result.content}`;
@@ -459,6 +570,72 @@ export class AgentTools {
     } catch (error: any) {
       console.error('❌ Agent page generation failed:', error.message);
       throw new Error(`Agent page generation failed: ${error.message}`);
+    }
+  }
+
+  private chunkAgentPage(content: string, elements: any[]): Array<{ content: string; startElement: number; endElement: number }> {
+    const chunks: Array<{ content: string; startElement: number; endElement: number }> = [];
+    const CHUNK_SIZE = 18000; // Leave room for headers
+    
+    // Split content by major sections (forms, navigation, etc.)
+    const sections = content.split(/\n(?=## )/); // Split on section headers
+    
+    let currentChunk = '';
+    let currentStartElement = 0;
+    let currentEndElement = 0;
+    let elementIndex = 0;
+    
+    for (const section of sections) {
+      // Count elements in this section
+      const sectionElementCount = (section.match(/\[\w+-[\w-]+\]/g) || []).length;
+      
+      // If adding this section would exceed limit, save current chunk
+      if (currentChunk && (currentChunk.length + section.length > CHUNK_SIZE)) {
+        chunks.push({
+          content: currentChunk.trim(),
+          startElement: currentStartElement,
+          endElement: currentEndElement
+        });
+        currentChunk = '';
+        currentStartElement = elementIndex;
+      }
+      
+      currentChunk += (currentChunk ? '\n\n' : '') + section;
+      currentEndElement = elementIndex + sectionElementCount - 1;
+      elementIndex += sectionElementCount;
+      
+      // If current chunk is getting large, save it
+      if (currentChunk.length > CHUNK_SIZE) {
+        chunks.push({
+          content: currentChunk.trim(),
+          startElement: currentStartElement,
+          endElement: currentEndElement
+        });
+        currentChunk = '';
+        currentStartElement = elementIndex;
+      }
+    }
+    
+    // Add remaining content
+    if (currentChunk.trim()) {
+      chunks.push({
+        content: currentChunk.trim(),
+        startElement: currentStartElement,
+        endElement: Math.max(currentEndElement, elements.length - 1)
+      });
+    }
+    
+    return chunks;
+  }
+
+  // Utility method to clean up old chunks
+  cleanupOldChunks(maxAge: number = 3600000): void { // 1 hour default
+    const now = Date.now();
+    for (const [id, chunk] of this.agentPageChunkData.entries()) {
+      if (now - chunk.metadata.timestamp.getTime() > maxAge) {
+        this.agentPageChunkData.delete(id);
+        console.log(`🧹 Cleaned up old agent page chunks: ${id}`);
+      }
     }
   }
 }

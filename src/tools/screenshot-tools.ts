@@ -76,25 +76,67 @@ export class ScreenshotTools {
       }
 
       // Check if screenshot needs to be chunked
-      const shouldChunk = screenshot.length > 8800; // Conservative limit for Claude
+      // Increased limit: Claude can handle ~25k tokens, base64 is roughly 1.33x original size
+      // So a 50KB image = ~67KB base64 = ~67k chars. We'll use 45k as a safe limit.
+      const shouldChunk = screenshot.length > 45000; // Safe limit for Claude (was 8800)
+      console.log(`📸 Screenshot size: ${screenshot.length} chars, shouldChunk: ${shouldChunk}`)
       
-      if (shouldChunk) {
-        const chunkId = await this.chunkLargeScreenshot(screenshot, {
-          fullPage,
-          quality,
-          viewport
+      if (shouldChunk && fullPage) {
+        // For full page screenshots that are too large, use pagination
+        console.log(`📸 Full page screenshot too large (${screenshot.length} chars), switching to paginated capture`);
+        
+        // Call capturePaginated with appropriate parameters
+        return await this.capturePaginated({
+          quality: quality || 50, // Use lower quality for paginated screenshots
+          overlap: 100 // Default overlap
         });
+      } else if (shouldChunk && !fullPage) {
+        // For viewport screenshots that are too large, reduce quality and retry
+        console.log(`📸 Viewport screenshot too large (${screenshot.length} chars), reducing quality`);
+        
+        const reducedQuality = Math.min(30, quality * 0.5); // Reduce quality by half, max 30
+        screenshotOptions.type = 'jpeg';
+        screenshotOptions.quality = reducedQuality;
+        
+        screenshot = await this.page.screenshot(screenshotOptions) as string;
+        
+        if (screenshot.length > 45000) {
+          // If still too large after quality reduction, chunk it
+          console.log(`📸 Viewport screenshot still too large (${screenshot.length} chars) after quality reduction to ${reducedQuality}, chunking...`);
+          
+          // Store the screenshot for chunking
+          const chunkId = randomUUID();
+          this.screenshotChunkData.set(chunkId, {
+            id: chunkId,
+            totalChunks: Math.ceil(screenshot.length / 8000),
+            chunks: this.splitScreenshotData(screenshot),
+            metadata: {
+              quality: reducedQuality,
+              fullPage: false,
+              timestamp: new Date()
+            }
+          });
+          
+          return {
+            content: [{ 
+              type: 'text', 
+              text: `📸 Viewport screenshot captured but too large (${screenshot.length} chars).\n` +
+                    `🧩 Automatically chunked into ${Math.ceil(screenshot.length / 8000)} pieces.\n` +
+                    `📋 Chunk ID: ${chunkId}\n` +
+                    `🔍 Use screenshot_get_chunk({id: "${chunkId}", chunk: 1}) to view the first chunk.`
+            }]
+          };
+        }
         
         return {
           content: [{ 
-            type: 'text', 
-            text: `📸 Screenshot captured but was too large (${screenshot.length} chars).\n` +
-                  `🧩 Automatically chunked into smaller pieces.\n` +
-                  `📋 Chunk ID: ${chunkId}\n` +
-                  `🔍 Use screenshot_get_chunk({id: "${chunkId}", chunk: 1}) to view the first chunk.`
+            type: 'image', 
+            data: screenshot, 
+            mimeType: 'image/jpeg'
           }]
         };
       } else {
+        // Screenshot is within size limits
         return {
           content: [{ 
             type: 'image', 
@@ -164,7 +206,17 @@ export class ScreenshotTools {
           encoding: 'base64'
         }) as string;
         
-        screenshots.push(screenshot);
+        // Validate screenshot before adding to array
+        if (screenshot && screenshot.length > 0) {
+          screenshots.push(screenshot);
+        } else {
+          console.warn(`⚠️ Invalid screenshot for segment ${i + 1}, skipping`);
+        }
+      }
+
+      // Validate that we have valid screenshots
+      if (screenshots.length === 0) {
+        throw new Error('Failed to capture any valid screenshots');
       }
 
       // Store chunked data
@@ -211,6 +263,12 @@ export class ScreenshotTools {
       }
 
       const screenshot = chunkData.chunks[chunk - 1];
+      
+      // Validate screenshot data before returning
+      if (!screenshot || screenshot.length === 0) {
+        throw new Error(`Screenshot chunk ${chunk} is empty or invalid. This may be due to a chunking error.`);
+      }
+      
       const mimeType = chunkData.metadata.quality < 100 ? 'image/jpeg' : 'image/png';
 
       return {
@@ -251,6 +309,12 @@ export class ScreenshotTools {
       }
 
       const screenshot = chunkData.chunks[frame - 1];
+      
+      // Validate screenshot data before returning
+      if (!screenshot || screenshot.length === 0) {
+        throw new Error(`Loading sequence frame ${frame} is empty or invalid. This may be due to a capture error.`);
+      }
+      
       const mimeType = 'image/jpeg'; // Loading sequences always use JPEG
       
       // Get frame metadata if available
@@ -293,32 +357,22 @@ export class ScreenshotTools {
     }
   }
 
-  // Private helper methods
-  private async chunkLargeScreenshot(screenshot: string, metadata: any): Promise<string> {
-    const chunkSize = 8000; // Conservative chunk size
+  // Private helper methods removed - chunkLargeScreenshot was fundamentally flawed
+  // We now use capturePaginated for large screenshots instead
+
+  // Utility method to clean up old chunks
+  // Split screenshot data into chunks
+  private splitScreenshotData(screenshot: string): string[] {
+    const chunkSize = 8000;
     const chunks: string[] = [];
     
     for (let i = 0; i < screenshot.length; i += chunkSize) {
       chunks.push(screenshot.slice(i, i + chunkSize));
     }
-
-    const chunkId = randomUUID();
-    this.screenshotChunkData.set(chunkId, {
-      id: chunkId,
-      totalChunks: chunks.length,
-      chunks,
-      metadata: {
-        ...metadata,
-        timestamp: new Date()
-      }
-    });
-
-    console.log(`🧩 Large screenshot chunked into ${chunks.length} pieces (ID: ${chunkId})`);
     
-    return chunkId;
+    return chunks;
   }
 
-  // Utility method to clean up old chunks
   cleanupOldChunks(maxAge: number = 3600000): void { // 1 hour default
     const now = Date.now();
     for (const [id, chunk] of this.screenshotChunkData.entries()) {

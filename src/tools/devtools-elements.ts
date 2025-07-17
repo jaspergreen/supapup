@@ -515,7 +515,7 @@ export class DevToolsElements {
           '#6C5CE7', '#74B9FF', '#A29BFE', '#55A3FF', '#FD79A8'
         ];
         
-        // Get all interactive elements
+        // Get all interactive elements (prioritize those with data-mcp-id)
         const selectors = includeAll ? '*' : 'a, button, input, textarea, select, [role="button"], [role="link"], [onclick], [data-mcp-id], img, video, iframe';
         const elements = document.querySelectorAll(selectors);
         const elementData: any[] = [];
@@ -574,8 +574,6 @@ export class DevToolsElements {
           // Set tracking attributes
           el.setAttribute('data-mcp-visual-map-id', mapId);
           el.setAttribute('data-mcp-visual-map-color', color);
-          // Add persistent data attribute that matches the visual number
-          el.setAttribute(`data-mcp-agent-page-element-${labelIndex}`, 'true');
           
           // Build CSS selector for element
           let selector = el.tagName.toLowerCase();
@@ -584,6 +582,11 @@ export class DevToolsElements {
           } else if (el.className && typeof el.className === 'string') {
             selector += `.${el.className.split(' ').filter(c => c).join('.')}`;
           }
+          
+          // Get existing agent page data (if available)
+          const mcpId = el.getAttribute('data-mcp-id');
+          const mcpAction = el.getAttribute('data-mcp-action');
+          const mcpType = el.getAttribute('data-mcp-type');
           
           // Collect element data
           elementData.push({
@@ -606,7 +609,9 @@ export class DevToolsElements {
               className: el.className,
               name: el.getAttribute('name'),
               href: el.getAttribute('href'),
-              'data-mcp-id': el.getAttribute('data-mcp-id')
+              'data-mcp-id': mcpId,
+              'data-mcp-action': mcpAction,
+              'data-mcp-type': mcpType
             }
           });
           
@@ -679,12 +684,11 @@ export class DevToolsElements {
           const originalBorder = element.getAttribute('data-mcp-original-border') || '';
           element.style.border = originalBorder;
           
-          // Clean up temporary attributes (but keep the persistent data-mcp-agent-page-element-X)
+          // Clean up temporary attributes  
           element.removeAttribute('data-mcp-visual-map-id');
           element.removeAttribute('data-mcp-visual-map-color');
           element.removeAttribute('data-mcp-original-border');
           element.removeAttribute('data-mcp-original-position');
-          // NOTE: data-mcp-agent-page-element-X attributes are kept for later use
         });
       });
       
@@ -719,16 +723,18 @@ export class DevToolsElements {
 
 📊 Found ${elementMap.elementCount} interactive elements numbered and highlighted in the image
 
-🎯 To interact with any numbered element, use the JavaScript helper functions:
-   • window.__AGENT_PAGE__.clickElement(1) - Click element 1
-   • window.__AGENT_PAGE__.fillElement(25, "text") - Fill element 25 with "text"  
-   • window.__AGENT_PAGE__.highlightElement(100) - Highlight element 100
-   • window.__AGENT_PAGE__.getElementByNumber(1) - Get element 1 DOM object
+🎯 To interact with any numbered element:
+   1. Use agent page execute_action with existing data-mcp-id (if available)
+   2. Use devtools_modify_css with CSS selector [data-mcp-visual-map-id="element-{number}"]
+   3. Use devtools_highlight_element with CSS selector [data-mcp-visual-map-id="element-{number}"]
 
-💡 Alternative: Use CSS selector [data-mcp-agent-page-element-{number}]
+💡 Examples:
+   • execute_action({actionId: "login-email", params: {value: "test@example.com"}}) - If element has data-mcp-id
+   • devtools_modify_css({selector: "[data-mcp-visual-map-id='element-1']", property: "background", value: "red"})
+   • devtools_highlight_element({selector: "[data-mcp-visual-map-id='element-1']"})
 
 📸 Current view shows elements in the visible area
-🔄 For full page coverage: Use screenshot(fullPage: true, quality: 50) with automatic chunking
+🔄 For full page coverage: Use screenshot_capture with fullPage: true
 
 📱 Screenshot automatically opened in new browser tab for better viewing`
             }
@@ -752,18 +758,26 @@ export class DevToolsElements {
 📸 Screenshot: Full page captured with all elements highlighted and labeled
 
 🎯 Element Map${hasMoreElements ? ` (showing first ${MAX_ELEMENTS_IN_RESPONSE} of ${elementMap.elementCount})` : ''}:
-${elementsToShow.map(el => 
-  `[${el.label}] ${el.tagName}${el.attributes.id ? '#' + el.attributes.id : ''} → data-mcp-agent-page-element-${el.label} - "${el.text.substring(0, 30)}${el.text.length > 30 ? '...' : ''}" (${el.borderColor})`
-).join('\n')}
+${elementsToShow.map(el => {
+  const mcpId = el.attributes['data-mcp-id'];
+  const mcpAction = el.attributes['data-mcp-action'];
+  const interaction = mcpId ? 
+    `execute_action({actionId: "${mcpId}"${mcpAction === 'fill' ? ', params: {value: "text"}' : ''}})` :
+    `devtools_modify_css({selector: "[data-mcp-visual-map-id='${el.mapId}']", property: "background", value: "red"})`;
+  
+  return `[${el.label}] ${el.tagName}${el.attributes.id ? '#' + el.attributes.id : ''} → ${interaction} - "${el.text.substring(0, 30)}${el.text.length > 30 ? '...' : ''}" (${el.borderColor})`;
+}).join('\n')}
 
 ${hasMoreElements ? `\n⚠️ ${elementMap.elementCount - MAX_ELEMENTS_IN_RESPONSE} more elements not shown (response size limit)\n` : ''}
-🎯 To interact with any numbered element, use the JavaScript helper functions:
-   • window.__AGENT_PAGE__.clickElement(1) - Click element 1
-   • window.__AGENT_PAGE__.fillElement(25, "text") - Fill element 25 with "text"
-   • window.__AGENT_PAGE__.highlightElement(100) - Highlight element 100
-   • window.__AGENT_PAGE__.getElementByNumber(1) - Get element 1 DOM object
 
-💡 Alternative: Use CSS selector [data-mcp-agent-page-element-{number}]
+🎯 To interact with any numbered element:
+   1. **Agent Page Elements** (preferred): Use execute_action with data-mcp-id
+   2. **Visual Map Elements**: Use devtools tools with CSS selector [data-mcp-visual-map-id="element-{number}"]
+
+💡 Examples:
+   • execute_action({actionId: "login-email", params: {value: "test@example.com"}}) - If element has data-mcp-id
+   • devtools_modify_css({selector: "[data-mcp-visual-map-id='element-1']", property: "background", value: "red"})
+   • devtools_highlight_element({selector: "[data-mcp-visual-map-id='element-1']"})
 
 📷 Screenshot Length: ${(screenshot as string).length} characters (base64)
 📱 Screenshot automatically opened in new browser tab for better viewing`
